@@ -70,7 +70,7 @@ add_library(kamping_base INTERFACE)
 target_include_directories(kamping_base INTERFACE include)
 
 # set C++ standard to C++17
-target_compile_features(kamping_base INTERFACE cxx_std_17)
+target_compile_features(kamping_base INTERFACE cxx_std_23)
 target_link_libraries(kamping_base INTERFACE MPI::MPI_CXX)
 
 list(
