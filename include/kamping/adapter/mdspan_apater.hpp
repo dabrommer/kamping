@@ -26,15 +26,11 @@ class MDSpanBuffer {
 public:
     using value_type = T;
 
-    MDSpanBuffer(DataBufferType&& object) : _object(std::move(object)), _data() {}
+    explicit MDSpanBuffer(DataBufferType&& object) : _object(std::move(object)), _data() {unpack();}
 
     void unpack() {
         _mdspan = _object.underlying();
         _data = _mdspan.data_handle();
-    }
-
-    void pack() {
-        // TODO
     }
 
     T* data() noexcept {
@@ -45,14 +41,13 @@ public:
         return _data;
     }
 
-    size_t size() const {
+    [[nodiscard]] size_t size() const {
         return _mdspan.size();
     }
 
 private:
-
     DataBufferType _object;
-    std::mdspan<value_type, Extent> _mdspan;
+    std::mdspan<T, Extent> _mdspan;
     T* _data;
 
 };
@@ -70,20 +65,6 @@ private:
             internal::BufferType::in_out_buffer>
             buffer(data);
             return MDSpanBuffer<T, Extent, decltype(buffer)>(std::move(buffer));
-    }
-
-   template<typename T, typename Extent>
-    auto md_span_recv() {
-        std::mdspan<int, std::dextents<size_t, 2>> mspan;
-        internal::GenericDataBuffer<
-            std::mdspan<T, Extent>,
-        internal::ParameterType,
-        internal::ParameterType::recv_buf,
-        internal::BufferModifiability::modifiable,
-        internal::BufferOwnership::owning,
-        internal::BufferType::out_buffer>
-        buffer(mspan);
-        return MDSpanBuffer<T, Extent, decltype(buffer)>(std::move(buffer));
     }
 }
 

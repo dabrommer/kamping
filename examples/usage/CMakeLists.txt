@@ -54,6 +54,10 @@ add_executable(example_sendrecv sendrecv_example.cpp)
 target_link_libraries(example_sendrecv kamping)
 target_compile_options(example_sendrecv PRIVATE ${KAMPING_WARNING_FLAGS})
 
+add_executable(example_mdspan mdspan_example.cpp)
+target_link_libraries(example_mdspan kamping)
+target_compile_options(example_mdspan PRIVATE ${KAMPING_WARNING_FLAGS})
+
 if (KAMPING_ENABLE_SERIALIZATION)
     add_executable(example_serialization serialization_example.cpp)
     target_link_libraries(example_serialization kamping cereal::cereal)
