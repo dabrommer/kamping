@@ -13,21 +13,15 @@
 
 #include <iostream>
 
-#include "helpers_for_examples.hpp"
-#include "kamping/checking_casts.hpp"
-#include "kamping/collectives/barrier.hpp"
 #include "kamping/communicator.hpp"
-#include "kamping/data_buffer.hpp"
 #include "kamping/environment.hpp"
 #include "kamping/named_parameters.hpp"
 #include "kamping/adapter/mdspan_apater.hpp"
 #include "kamping/p2p/recv.hpp"
 #include "kamping/p2p/send.hpp"
-#include "kamping/p2p/sendrecv.hpp"
 
 #include <cstddef>
 #include <mdspan>
-#include <print>
 #include <vector>
 
 int main() {

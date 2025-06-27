@@ -51,21 +51,22 @@ private:
     T* _data;
 
 };
-    template<typename T, typename Extent, typename Accessor = std::default_accessor<T>>
-    auto md_span_send(std::mdspan<T, Extent> data) {
-
-        static_assert(std::is_same_v<Accessor, std::default_accessor<T>>,
-                  "use std::default_accessor<T>");
-            internal::GenericDataBuffer<
-                decltype(data),
+    template<typename T, typename Extent, typename LayoutPolicy = std::layout_right, typename Accessor = std::default_accessor<T>>
+    auto md_span_send(std::mdspan<T, Extent, LayoutPolicy, Accessor>& data) {
+        static_assert(std::is_same_v<Accessor, std::default_accessor<T>>, "use std::default_accessor<T>");
+        static_assert(std::is_same_v<LayoutPolicy, std::layout_right>, "use std::layout_right");
+        internal::GenericDataBuffer<
+            std::mdspan<T, Extent>,
             internal::ParameterType,
-            internal::ParameterType::send_recv_buf,
-            internal::BufferModifiability::modifiable,
-            internal::BufferOwnership::owning,
-            internal::BufferType::in_out_buffer>
-            buffer(data);
-            return MDSpanBuffer<T, Extent, decltype(buffer)>(std::move(buffer));
+            internal::ParameterType::send_buf,
+            internal::BufferModifiability::constant,
+            internal::BufferOwnership::referencing,
+            internal::BufferType::in_buffer>
+        buffer(data);
+        return MDSpanBuffer<T, Extent, decltype(buffer)>(std::move(buffer));
     }
+
+
 }
 
 
