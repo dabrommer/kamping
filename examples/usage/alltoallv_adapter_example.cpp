@@ -36,15 +36,24 @@ int main() {
         std::mdspan<int, std::extents<size_t, size, num_elems>> ms_sbuf(sbuf.data());
         std::vector<int>                                        size_v(size, num_elems);
 
-        auto set_displs = add_displs() | auto_displs();
+        // Set displs
+        std::vector<int> a(4);
+        auto set_displs_ = add_displs(a);
+
+        auto set_displs = auto_displs(a);
+        auto set_displs = auto_displs();
+        auto set_displs = auto_displs<Resize>(a);
+
         auto send_buf   = adapter::MDSpanAdapter(ms_sbuf) | add_size_v(size_v) | set_displs;
+
+        //auto send_buf_   = adapter::MDSpanAdapter(ms_sbuf) | add_size_v(size_v) | set_displs_;
 
         std::vector<int>                                        rbuf(size * num_elems, 0);
         std::mdspan<int, std::extents<size_t, size, num_elems>> ms_rbuf(rbuf.data());
         std::vector<int>                                        size_v_recv(size, num_elems);
 
         // Does not satisfy HasDispls
-        // auto a = adapter::MDSpanAdapter(ms_rbuf) | auto_displs();
+        //auto a = adapter::MDSpanAdapter(ms_rbuf) | auto_displs();
 
         // Does not satisfy HasSizeV
         // auto a = adapter::MDSpanAdapter(ms_rbuf) | add_displs() | auto_displs();
@@ -53,7 +62,9 @@ int main() {
         // add_size_v inbetween works
         // auto recv_buf = adapter::MDSpanAdapter(ms_rbuf) | add_displs() | add_size_v(size_v_recv) | auto_displs() ;
 
-        auto recv_buf     = adapter::MDSpanAdapter(ms_rbuf) | add_size_v(size_v_recv) | add_displs() | auto_displs();
+        std::vector<int> empty_displs(comm.size());
+
+        auto recv_buf     = adapter::MDSpanAdapter(ms_rbuf) | add_size_v(size_v_recv) | auto_displs(empty_displs);
         auto [sent, recv] = comm.alltoallv(send_buf, recv_buf);
 
         if (comm.rank_signed() == 0) {

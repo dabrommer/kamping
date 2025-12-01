@@ -13,6 +13,7 @@ template <CommType type, typename SBuff, typename RBuff, typename Communicator>
 requires(type == CommType::allgather || type == CommType::alltoall) void infer(
     SBuff& sbuf, RBuff& rbuf, Communicator& comm
 ) {
+    // tag dipatch für set_size
     if constexpr (HasSetSize<RBuff>) {
         size_t recv_size = get_recv_size<type>(sbuf, rbuf, comm);
         rbuf.set_size(recv_size);
@@ -22,16 +23,17 @@ requires(type == CommType::allgather || type == CommType::alltoall) void infer(
 template <CommType type, typename SBuff, typename RBuff, typename Communicator>
 requires(type == CommType::alltoallv) void infer(SBuff& sbuf, RBuff& rbuf, Communicator& comm) {
     KASSERT(
-        comm.is_same_on_all_ranks(HasSetSizeV<RBuff>),
+        comm.is_same_on_all_ranks(Tag),
         "Receive counts have to be computed on some ranks, but not on all or on none",
         assert::light_communication
     );
     // Calc recv counts
-    if constexpr (HasSetSizeV<RBuff>) {
+    if constexpr (Tag<RBuff>) {
         auto             send_counts = sbuf.size_v();
         std::vector<int> recv_counts(comm.size());
-        comm.alltoall(send_counts, recv_counts);
-        rbuf.set_size_v(std::move(recv_counts));
+        comm.alltoall(sbuf.size_v(), rbuf.size_v());
+        //rbuf.set_size_v(recv_counts);
+        rbuf.notify_infer();
     }
 }
 

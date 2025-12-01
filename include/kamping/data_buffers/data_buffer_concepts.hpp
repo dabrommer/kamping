@@ -25,8 +25,8 @@ concept RecvDataBuffer =
     DataBufferConcept<RBuff> && std::ranges::output_range<RBuff, std::ranges::range_value_t<RBuff>>;
 
 template <typename T>
-concept IntContiguousRange = std::ranges::contiguous_range<T> && std::same_as < std::ranges::range_value_t<T>,
-int > &&std::ranges::sized_range<T>;
+concept IntContiguousRange = std::ranges::contiguous_range<T> && std::convertible_to < std::ranges::range_value_t<T>,
+const int > &&std::ranges::sized_range<T>;
 
 template <typename Buff>
 concept HasSizeV = requires(Buff buf) {
@@ -47,13 +47,13 @@ concept HasSetSize = requires(Buff buf, size_t size) {
 };
 
 template <typename Buff>
-concept HasSetSizeV = requires(Buff buf, std::vector<int>&& sizes) {
-    {buf.set_size_v(std::move(sizes))};
+concept HasSetSizeV = requires(Buff buf, std::vector<int>& sizes) {
+    {buf.set_size_v(sizes)};
 };
 
 template <typename Buff>
-concept HasSetDispls = requires(Buff buf, std::vector<int>&& displs) {
-    {buf.set_displs(std::move(displs))};
+concept HasSetDispls = requires(Buff buf, std::vector<int>& displs) {
+    {buf.set_displs(displs)};
 };
 
 } // namespace kamping

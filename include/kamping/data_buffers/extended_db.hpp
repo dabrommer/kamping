@@ -36,12 +36,12 @@ public:
         return _displs;
     }
 
-    void set_size_v(std::vector<int>&& sizes) {
-        _sizes = std::move(sizes);
+    void set_size_v(std::vector<int>& sizes) {
+        _sizes = sizes;
     }
 
-    void set_displs(std::vector<int>&& displs) {
-        _displs = std::move(displs);
+    void set_displs(std::vector<int>& displs) {
+        _displs = displs;
     }
 
     void set_size(size_t size) {
