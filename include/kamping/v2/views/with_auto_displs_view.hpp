@@ -24,10 +24,10 @@ class with_auto_displs_view : public kamping::ranges::view_interface<with_auto_d
     mutable bool   needs_to_compute_displs_ = true;
 
 public:
-    constexpr Base const& base() const& {
+    constexpr Base const& base() const& noexcept {
         return base_;
     }
-    constexpr Base& base() & {
+    constexpr Base& base() & noexcept {
         return base_;
     }
 

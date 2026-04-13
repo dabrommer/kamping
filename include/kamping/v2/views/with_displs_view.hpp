@@ -21,10 +21,10 @@ class with_displs_view : public kamping::ranges::view_interface<with_displs_view
     Displs displs_;
 
 public:
-    constexpr Base const& base() const& {
+    constexpr Base const& base() const& noexcept {
         return base_;
     }
-    constexpr Base& base() & {
+    constexpr Base& base() & noexcept {
         return base_;
     }
 

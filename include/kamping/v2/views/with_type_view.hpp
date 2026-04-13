@@ -15,10 +15,10 @@ class with_type_view : public kamping::ranges::view_interface<with_type_view<Bas
     MPI_Datatype type_;
 
 public:
-    constexpr Base const& base() const& {
+    constexpr Base const& base() const& noexcept {
         return base_;
     }
-    constexpr Base& base() & {
+    constexpr Base& base() & noexcept {
         return base_;
     }
 
@@ -26,7 +26,7 @@ public:
     with_type_view(R&& base, MPI_Datatype type)
         : base_(kamping::ranges::all(std::forward<R>(base))), type_(type) {}
 
-    auto mpi_type() const {
+    constexpr auto mpi_type() const {
         return type_;
     }
 };

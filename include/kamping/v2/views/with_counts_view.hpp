@@ -18,10 +18,10 @@ class with_counts_view : public kamping::ranges::view_interface<with_counts_view
     Counts counts_;
 
 public:
-    constexpr Base const& base() const& {
+    constexpr Base const& base() const& noexcept {
         return base_;
     }
-    constexpr Base& base() & {
+    constexpr Base& base() & noexcept {
         return base_;
     }
 

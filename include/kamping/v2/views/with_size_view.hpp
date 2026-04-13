@@ -16,10 +16,10 @@ class with_size_view : public kamping::ranges::view_interface<with_size_view<Bas
     std::ptrdiff_t size_;
 
 public:
-    constexpr Base const& base() const& {
+    constexpr Base const& base() const& noexcept {
         return base_;
     }
-    constexpr Base& base() & {
+    constexpr Base& base() & noexcept {
         return base_;
     }
 
@@ -27,7 +27,7 @@ public:
     with_size_view(R&& base, std::ptrdiff_t size)
         : base_(kamping::ranges::all(std::forward<R>(base))), size_(size) {}
 
-    std::ptrdiff_t mpi_size() const {
+    constexpr std::ptrdiff_t mpi_size() const {
         return size_;
     }
 };

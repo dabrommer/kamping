@@ -49,6 +49,11 @@ public:
         // Fast path: monotonically increasing displs (e.g. exclusive_scan or user-declared).
         // Tight O(1) bound: last_displ + last_count.
         // General path: non-monotonic displs require max(displs[i] + counts[i]) over all i.
+        //
+        // The compile-time check (has_monotonic_displs) selects whether the fast path is
+        // available at all. The runtime check (displs_monotonic()) allows user types to
+        // conditionally report non-monotonic displacements, e.g. when the same view type
+        // is used with both monotonic and non-monotonic data depending on construction.
         if constexpr (has_monotonic_displs<Base>) {
             if (n > 0 && base_.displs_monotonic()) {
                 total = static_cast<std::ptrdiff_t>(displs_ptr[n - 1]) + counts_ptr[n - 1];
