@@ -66,16 +66,16 @@ template <typename T>
 concept is_adaptor_closure = std::derived_from<std::remove_cvref_t<T>, adaptor_closure_base>;
 
 /// Detects external range adaptor closures (e.g. std::views::take(2)) by duck typing:
-/// they are not ranges themselves but are callable with a range argument.
-/// Used to route closure | closure to composition rather than closure(value).
-/// Note: this can false-positive on arbitrary callables that accept a range argument
-/// but are not intended as range adaptors. In practice this is not an issue because
-/// only types appearing on the right-hand side of | with a kamping closure are tested.
+/// they are not ranges themselves but are callable with a range argument and produce a range.
+/// Used to route std_closure | kamping_closure to composition rather than applying the
+/// kamping closure to the std closure as a value.
 template <typename T>
 concept is_external_closure =
     !std::ranges::range<std::remove_cvref_t<T>> &&
     !is_adaptor_closure<T> &&
-    requires(std::remove_cvref_t<T> const& t, std::ranges::empty_view<int> r) { t(r); };
+    requires(std::remove_cvref_t<T> const& t, std::ranges::empty_view<int> r) {
+        { t(r) } -> std::ranges::range;
+    };
 
 // ──────────────────────────────────────────────────────────────────────────────
 // adaptor_closure — CRTP base providing operator|
