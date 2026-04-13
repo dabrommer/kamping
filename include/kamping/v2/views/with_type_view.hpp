@@ -22,7 +22,9 @@ public:
         return base_;
     }
 
-    with_type_view(Base base, MPI_Datatype type) : base_(std::move(base)), type_(type) {}
+    template <typename R>
+    with_type_view(R&& base, MPI_Datatype type)
+        : base_(kamping::ranges::all(std::forward<R>(base))), type_(type) {}
 
     auto mpi_type() const {
         return type_;

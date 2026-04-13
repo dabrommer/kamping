@@ -20,7 +20,8 @@ class resize_buf_view : public view_interface<resize_buf_view<Base>> {
     bool           needs_resize_ = false;
 
 public:
-    explicit resize_buf_view(Base base) : base_(std::move(base)) {}
+    template <typename R>
+    explicit resize_buf_view(R&& base) : base_(kamping::ranges::all(std::forward<R>(base))) {}
 
     constexpr Base&       base() &      noexcept { return base_; }
     constexpr Base const& base() const& noexcept { return base_; }

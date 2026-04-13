@@ -23,7 +23,9 @@ public:
         return base_;
     }
 
-    with_size_view(Base base, std::ptrdiff_t size) : base_(std::move(base)), size_(size) {}
+    template <typename R>
+    with_size_view(R&& base, std::ptrdiff_t size)
+        : base_(kamping::ranges::all(std::forward<R>(base))), size_(size) {}
 
     std::ptrdiff_t mpi_size() const {
         return size_;
