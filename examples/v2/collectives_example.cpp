@@ -1,7 +1,12 @@
+#include <functional>
 #include <print>
+#include <ranges>
 #include <vector>
 
+#include "kamping/communicator.hpp"
 #include "kamping/environment.hpp"
+#include "kamping/v2/collectives/bcast.hpp"
+#include "kamping/v2/contrib/cereal_view.hpp"
 #include "kamping/v2/ranges/concepts.hpp"
 #include "kamping/v2/ranges/ranges.hpp"
 #include "kamping/v2/tags.hpp"
@@ -62,7 +67,7 @@ int main(int, char*[]) {
 
     // ── resize_v_view with auto displs (monotonic fast path) ─────────────────
     {
-        auto             counts_buf = kamping::views::auto_counts();
+        auto counts_buf = kamping::views::auto_counts();
         counts_buf.set_comm_size(3);
         counts_buf.counts()[0] = 1;
         counts_buf.counts()[1] = 2;
@@ -72,10 +77,8 @@ int main(int, char*[]) {
         std::vector<int> recv_data;
         std::vector<int> displs_buf;
         // chain: recv_data | with_counts | with_auto_displs | resize_v
-        auto rbuf = recv_data
-                    | kamping::views::with_counts(counts_buf.counts())
-                    | kamping::views::with_auto_displs(kamping::v2::resize, displs_buf)
-                    | kamping::views::resize_v;
+        auto rbuf = recv_data | kamping::views::with_counts(counts_buf.counts())
+                    | kamping::views::with_auto_displs(kamping::v2::resize, displs_buf) | kamping::views::resize_v;
         static_assert(kamping::ranges::data_buffer_v<decltype(rbuf)>);
         // with_auto_displs always provides monotonic displs
         static_assert(kamping::ranges::has_monotonic_displs<decltype(rbuf)>);
@@ -86,7 +89,7 @@ int main(int, char*[]) {
 
     // ── resize_v_view with user displs (non-monotonic, O(p) path) ────────────
     {
-        auto             counts_buf = kamping::views::auto_counts();
+        auto counts_buf = kamping::views::auto_counts();
         counts_buf.set_comm_size(3);
         counts_buf.counts()[0] = 1;
         counts_buf.counts()[1] = 2;
@@ -96,10 +99,8 @@ int main(int, char*[]) {
         std::vector<int> recv_data;
         // Non-standard displs: rank 2 at offset 10 → buffer must be 13
         std::vector<int> user_displs{0, 1, 10};
-        auto             rbuf = recv_data
-                     | kamping::views::with_counts(counts_buf.counts())
-                     | kamping::views::with_displs(user_displs)
-                     | kamping::views::resize_v;
+        auto             rbuf = recv_data | kamping::views::with_counts(counts_buf.counts())
+                                | kamping::views::with_displs(user_displs) | kamping::views::resize_v;
         static_assert(kamping::ranges::data_buffer_v<decltype(rbuf)>);
         static_assert(!kamping::ranges::has_monotonic_displs<decltype(rbuf)>);
         auto* ptr = rbuf.mpi_data(); // max(0+1, 1+2, 10+3) = 13
@@ -109,7 +110,7 @@ int main(int, char*[]) {
 
     // ── resize_v_view with user-declared monotonic displs (fast path) ─────────
     {
-        auto             counts_buf = kamping::views::auto_counts();
+        auto counts_buf = kamping::views::auto_counts();
         counts_buf.set_comm_size(3);
         counts_buf.counts()[0] = 1;
         counts_buf.counts()[1] = 2;
@@ -118,10 +119,8 @@ int main(int, char*[]) {
 
         std::vector<int> recv_data;
         std::vector<int> mono_displs{0, 1, 3}; // exclusive scan of {1,2,3}
-        auto             rbuf = recv_data
-                     | kamping::views::with_counts(counts_buf.counts())
-                     | kamping::views::with_displs(kamping::v2::monotonic, mono_displs)
-                     | kamping::views::resize_v;
+        auto rbuf = recv_data | kamping::views::with_counts(counts_buf.counts())
+                    | kamping::views::with_displs(kamping::v2::monotonic, mono_displs) | kamping::views::resize_v;
         static_assert(kamping::ranges::data_buffer_v<decltype(rbuf)>);
         static_assert(kamping::ranges::has_monotonic_displs<decltype(rbuf)>);
         auto* ptr = rbuf.mpi_data(); // fast path: displs[2]+counts[2] = 3+3 = 6
@@ -136,9 +135,8 @@ int main(int, char*[]) {
         std::vector<int> counts_vec{1, 2, 3};
         std::vector<int> recv_data;
         std::vector<int> displs_buf;
-        auto             chain = recv_data
-                     | kamping::views::with_counts(counts_vec)
-                     | kamping::views::with_auto_displs(kamping::v2::resize, displs_buf);
+        auto             chain = recv_data | kamping::views::with_counts(counts_vec)
+                                 | kamping::views::with_auto_displs(kamping::v2::resize, displs_buf);
 
         // First displs computation
         std::println("displs before commit: {}", kamping::ranges::displs(chain));
@@ -177,9 +175,8 @@ int main(int, char*[]) {
         std::vector<int> data{1, 2, 3, 4, 5, 6};
         std::vector<int> cv{1, 2, 3};
         std::vector<int> dv{0, 1, 3};
-        auto             view = data | kamping::views::with_counts(cv)
-                                     | kamping::views::with_displs(dv);
-        dv[2] = 10; // mutate original
+        auto             view = data | kamping::views::with_counts(cv) | kamping::views::with_displs(dv);
+        dv[2]                 = 10; // mutate original
         std::println("with_displs lvalue borrow: displs={}", kamping::ranges::displs(view));
         // → [0, 1, 10]
     }
@@ -188,9 +185,8 @@ int main(int, char*[]) {
     {
         std::vector<int> data{1, 2, 3, 4, 5, 6};
         std::vector<int> cv{1, 2, 3};
-        auto             view = data | kamping::views::with_counts(cv)
-                                     | kamping::views::with_displs(std::vector<int>{0, 1, 3});
-        auto dv = std::move(view).displs().base();
+        auto view = data | kamping::views::with_counts(cv) | kamping::views::with_displs(std::vector<int>{0, 1, 3});
+        auto dv   = std::move(view).displs().base();
         std::println("with_displs rvalue extract: displs={}", dv);
         // → [0, 1, 3]
     }
@@ -200,8 +196,7 @@ int main(int, char*[]) {
         std::vector<int> data{1, 2, 3, 4, 5, 6};
         std::vector<int> cv{1, 2, 3};
         std::vector<int> dv(3); // pre-sized; all() borrows via ref_view
-        auto             view = data | kamping::views::with_counts(cv)
-                                     | kamping::views::with_auto_displs(dv);
+        auto             view = data | kamping::views::with_counts(cv) | kamping::views::with_auto_displs(dv);
         (void)kamping::ranges::displs(view); // triggers exclusive_scan into dv
         std::println("with_auto_displs lvalue: displs={}, original dv={}", kamping::ranges::displs(view), dv);
         // → [0, 1, 3], dv = [0, 1, 3]
@@ -212,7 +207,7 @@ int main(int, char*[]) {
         std::vector<int> data{1, 2, 3, 4, 5, 6};
         std::vector<int> cv{1, 2, 3};
         auto             view = data | kamping::views::with_counts(cv)
-                                     | kamping::views::with_auto_displs(kamping::v2::resize, std::vector<int>{});
+                                | kamping::views::with_auto_displs(kamping::v2::resize, std::vector<int>{});
         (void)kamping::ranges::displs(view); // resizes and fills via exclusive_scan
         auto dv = std::move(view).displs().base();
         std::println("with_auto_displs rvalue extract: displs={}", dv);
@@ -230,9 +225,8 @@ int main(int, char*[]) {
         // counts_buf.counts() returns owning_view<vector<int>>& (non-copyable kamping lvalue)
         // → all() wraps in ref_view<owning_view<...>>; same as passing a plain lvalue range.
         std::vector<int> data;
-        auto             rbuf = data | kamping::views::with_counts(counts_buf.counts())
-                                     | kamping::views::with_auto_displs()
-                                     | kamping::views::resize_v;
+        auto rbuf = data | kamping::views::with_counts(counts_buf.counts()) | kamping::views::with_auto_displs()
+                    | kamping::views::resize_v;
         (void)rbuf.mpi_data(); // resizes data to 1+2+3 = 6
         std::println("auto_counts owned + with_counts(counts()): data.size()={}", data.size());
         // Extract the owned vector back out
@@ -250,13 +244,21 @@ int main(int, char*[]) {
         counts_buf.counts()[2]      = 6;
         // counts_buf.counts() returns ref_view<vector<int>>& (copyable) → copies the pointer
         std::vector<int> data;
-        auto             rbuf = data | kamping::views::with_counts(counts_buf.counts())
-                                     | kamping::views::with_auto_displs()
-                                     | kamping::views::resize_v;
+        auto rbuf = data | kamping::views::with_counts(counts_buf.counts()) | kamping::views::with_auto_displs()
+                    | kamping::views::resize_v;
         (void)rbuf.mpi_data(); // resizes data to 4+5+6 = 15
         std::println("auto_counts lvalue + with_counts(counts()): data.size()={}", data.size());
         std::println("auto_counts lvalue original cv={}", cv); // writes through to cv
         // → cv = [4, 5, 6]
+    }
+
+    {
+        int val = 0;
+        if (kamping::world_rank() == 0) {
+            val = 42;
+        }
+        auto result = kamping::v2::bcast(val | kamping::views::serialize);
+        std::println("[R{}] bcast result={}", kamping::world_rank(), *result);
     }
 
     return 0;

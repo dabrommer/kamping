@@ -27,6 +27,7 @@ namespace kamping {
 
 namespace comm_op {
 struct recv {};
+struct bcast {};
 struct allgather {};
 struct alltoall {};
 struct sendrecv {};
@@ -42,6 +43,25 @@ auto infer(comm_op::recv, RBuf& rbuf, int source, int tag, MPI_Comm comm) {
         core::mprobe(source, tag, comm, &message, status);
         rbuf.set_recv_count(static_cast<std::ptrdiff_t>(status.count(kamping::ranges::type(rbuf))));
         return message;
+    }
+}
+template <kamping::ranges::send_recv_buffer SRBuf>
+auto infer(comm_op::bcast, SRBuf& srbuf, int root, MPI_Comm comm) {
+    if constexpr (kamping::ranges::deferred_recv_buf<SRBuf>) {
+        int rank = 0;
+        MPI_Comm_rank(comm, &rank);
+        auto size_on_root = rank == root ? kamping::ranges::size(srbuf) : 0;
+        auto size_view    = std::views::single(size_on_root);
+        MPI_Bcast(
+            kamping::ranges::data(size_view),
+            static_cast<int>(kamping::ranges::size(size_view)),
+            kamping::ranges::type(size_view),
+            root,
+            comm
+        );
+        if (rank != root) {
+            srbuf.set_recv_count(size_view.front());
+        }
     }
 }
 
@@ -62,7 +82,9 @@ void infer(comm_op::alltoall, SBuf const& sbuf, RBuf& rbuf, MPI_Comm /* comm */)
 }
 
 template <kamping::ranges::send_buffer SBuf, kamping::ranges::recv_buffer RBuf>
-void infer(comm_op::sendrecv, SBuf const& sbuf, RBuf& rbuf, int dest, int send_tag, int source, int recv_tag, MPI_Comm comm) {
+void infer(
+    comm_op::sendrecv, SBuf const& sbuf, RBuf& rbuf, int dest, int send_tag, int source, int recv_tag, MPI_Comm comm
+) {
     if constexpr (kamping::ranges::deferred_recv_buf<RBuf>) {
         int const send_count = static_cast<int>(kamping::ranges::size(sbuf));
         int       recv_count = 0;

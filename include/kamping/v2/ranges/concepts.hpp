@@ -39,6 +39,9 @@ concept recv_buffer = data_buffer<T> && requires(T&& t) {
 };
 
 template <typename T>
+concept send_recv_buffer = recv_buffer<T>;
+
+template <typename T>
 concept has_mpi_sizev = requires(T const& t) {
     { kamping::ranges::sizev(t) } -> count_range;
 };
@@ -92,13 +95,9 @@ concept has_set_comm_size = requires(T& t, int n) { t.set_comm_size(n); };
 ///   2. MPI writes into counts().data() — fill per-rank counts directly
 ///   3. commit_counts()               — signal counts are ready; invalidate cached state
 template <typename T>
-concept deferred_recv_buf_v =
-    has_counts_accessor<T> &&
-    has_commit_counts<T> &&
-    has_set_comm_size<T> &&
-    requires(T& t) {
-        { std::ranges::data(t.counts()) } -> std::convertible_to<int*>;
-    };
+concept deferred_recv_buf_v = has_counts_accessor<T> && has_commit_counts<T> && has_set_comm_size<T> && requires(T& t) {
+    { std::ranges::data(t.counts()) } -> std::convertible_to<int*>;
+};
 
 // ──────────────────────────────────────────────────────────────────────────────
 // enable_borrowed_buffer — opt-in trait for non-owning buffer types.
