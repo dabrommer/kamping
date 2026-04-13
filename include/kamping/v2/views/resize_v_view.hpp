@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <ranges>
 
-#include "kamping/v2/ranges/adaptor_closure.hpp"
+#include "kamping/v2/ranges/adaptor.hpp"
 #include "kamping/v2/ranges/all.hpp"
 #include "kamping/v2/ranges/concepts.hpp"
 #include "kamping/v2/ranges/ranges.hpp"

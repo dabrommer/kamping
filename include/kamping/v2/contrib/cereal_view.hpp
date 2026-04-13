@@ -8,7 +8,7 @@
 #include <cereal/archives/binary.hpp>
 
 #include "kamping/builtin_types.hpp"
-#include "kamping/v2/ranges/adaptor_closure.hpp"
+#include "kamping/v2/ranges/adaptor.hpp"
 
 namespace kamping::ranges {
 
