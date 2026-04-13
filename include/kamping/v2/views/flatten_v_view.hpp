@@ -41,7 +41,7 @@ namespace ranges {
 template <typename Source, typename FlatBuf, count_range Counts,
           bool resize_buf = false, bool resize_counts = false>
     requires std::ranges::forward_range<Source> && std::ranges::sized_range<Source>
-             && std::ranges::contiguous_range<std::ranges::range_value_t<Source>>
+             && std::ranges::input_range<std::ranges::range_value_t<Source>>
              && std::ranges::sized_range<std::ranges::range_value_t<Source>>
 class flatten_v_view
     : public view_interface<flatten_v_view<Source, FlatBuf, Counts, resize_buf, resize_counts>> {
@@ -85,9 +85,7 @@ class flatten_v_view
         using elem_t = std::ranges::range_value_t<std::ranges::range_value_t<Source>>;
         elem_t* dest = std::ranges::data(flat_buf_);
         for (auto&& inner : source_) {
-            auto const n = std::ranges::size(inner);
-            std::copy_n(std::ranges::data(inner), n, dest);
-            dest += n;
+            dest = std::copy(std::ranges::begin(inner), std::ranges::end(inner), dest);
         }
 
         needs_flatten_ = false;
