@@ -134,7 +134,7 @@ auto isendrecv(
 /// **Synchronous work on the caller's thread.** Before the underlying
 /// MPI_Isendrecv is issued, this call invokes the `infer(comm_op::sendrecv, ...)`
 /// customization point. The default overload for buffers satisfying
-/// `resizable_recv_buf` runs a **blocking** `MPI_Sendrecv` of a single count so
+/// `deferred_recv_buf` runs a **blocking** `MPI_Sendrecv` of a single count so
 /// the incoming message size can be determined and the recv buffer sized to fit.
 /// User-supplied `infer()` overloads may also perform blocking work. In both
 /// cases, this call will not return until that synchronous work has completed —

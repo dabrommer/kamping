@@ -77,11 +77,67 @@ struct view_interface : public view_interface_base, public std::ranges::view_int
         return kamping::ranges::data(derived().base());
     }
 
+    constexpr auto mpi_sizev() const
+        requires kamping::ranges::has_mpi_sizev<decltype(derived().base())>
+    {
+        return kamping::ranges::sizev(derived().base());
+    }
+
+    constexpr auto mpi_displs() const
+        requires kamping::ranges::has_mpi_displs<decltype(derived().base())>
+    {
+        return kamping::ranges::displs(derived().base());
+    }
+
+    decltype(auto) counts() const&
+        requires kamping::ranges::has_counts_accessor<decltype(derived().base())>
+    {
+        return derived().base().counts();
+    }
+    decltype(auto) counts() &
+        requires kamping::ranges::has_counts_accessor<decltype(derived().base())>
+    {
+        return derived().base().counts();
+    }
+    decltype(auto) counts() &&
+        requires kamping::ranges::has_counts_accessor<decltype(derived().base())>
+    {
+        return std::move(derived().base()).counts();
+    }
+
+    decltype(auto) displs() const&
+        requires kamping::ranges::has_displs_accessor<decltype(derived().base())>
+    {
+        return derived().base().displs();
+    }
+    decltype(auto) displs() &
+        requires kamping::ranges::has_displs_accessor<decltype(derived().base())>
+    {
+        return derived().base().displs();
+    }
+    decltype(auto) displs() &&
+        requires kamping::ranges::has_displs_accessor<decltype(derived().base())>
+    {
+        return std::move(derived().base()).displs();
+    }
+
     void mpi_resize_for_receive(std::ptrdiff_t n)
         requires(kamping::ranges::has_mpi_resize_for_receive<decltype(derived().base())>
                  || kamping::ranges::has_resize<decltype(derived().base())>)
     {
         kamping::ranges::resize_for_receive(derived().base(), n);
+    }
+
+    void commit_counts()
+        requires kamping::ranges::has_commit_counts<decltype(derived().base())>
+    {
+        derived().base().commit_counts();
+    }
+
+    constexpr bool displs_monotonic() const
+        requires kamping::ranges::has_monotonic_displs<decltype(derived().base())>
+    {
+        return derived().base().displs_monotonic();
     }
 };
 } // namespace kamping::ranges

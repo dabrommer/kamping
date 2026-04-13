@@ -86,7 +86,7 @@ auto irecv(
 /// **Synchronous work on the caller's thread.** Before the underlying MPI_Irecv/
 /// MPI_Imrecv is issued, this call invokes the `infer(comm_op::recv, ...)`
 /// customization point. The default overload for buffers satisfying
-/// `resizable_recv_buf` runs a **blocking** `MPI_Mprobe` so the incoming message
+/// `deferred_recv_buf` runs a **blocking** `MPI_Mprobe` so the incoming message
 /// size can be determined and the buffer sized to fit. User-supplied `infer()`
 /// overloads may also perform blocking work. In both cases, this call will not
 /// return until that synchronous work has completed — it is "non-blocking" only

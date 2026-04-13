@@ -14,12 +14,24 @@ namespace kamping::ranges {
 // against ADL circularity (std::ranges::size → ADL kamping::ranges::size → std::ranges::sized_range).
 struct view_interface_base {};
 
+/// A type that is a "view" in the kamping sense: either a std::ranges::view
+/// (lightweight, copyable, e.g. std::span) or a kamping view (derived from
+/// view_interface_base — may be owning and non-copyable like owning_view).
+/// Mirrors the role of the std::ranges::view concept but extended for kamping.
+template <typename T>
+concept view = std::ranges::view<T> || std::derived_from<T, view_interface_base>;
+
 template <class T>
 concept integer_like = std::integral<T> && !std::same_as<T, bool>;
 
 template <class T>
-concept ptr_to_object = std::is_pointer_v<T>
-                        && (std::is_object_v<std::remove_pointer_t<T>> || std::is_void_v<std::remove_pointer_t<T>>);
+concept ptr_to_object =
+    std::is_pointer_v<T> && (std::is_object_v<std::remove_pointer_t<T>> || std::is_void_v<std::remove_pointer_t<T>>);
+
+/// A contiguous range of `int` — the element type used for MPI counts and displacements.
+template <typename T>
+concept count_range =
+    std::ranges::contiguous_range<T> && std::same_as<int, std::remove_cvref_t<std::ranges::range_value_t<T>>>;
 
 template <typename T>
 concept has_mpi_compatible_size_member = requires(std::remove_reference_t<T> const& t) {
@@ -37,14 +49,22 @@ concept has_mpi_compatible_type_member = requires(std::remove_reference_t<T> con
 };
 
 template <typename T>
+concept has_mpi_compatible_sizev_member = requires(std::remove_reference_t<T> const& t) {
+    { t.mpi_sizev() } -> count_range;
+};
+
+template <typename T>
+concept has_mpi_compatible_displs_member = requires(std::remove_reference_t<T> const& t) {
+    { t.mpi_displs() } -> count_range;
+};
+
+template <typename T>
 concept range_of_builtin_mpi_type =
     std::ranges::range<T> && kamping::is_builtin_type_v<std::remove_cvref_t<std::ranges::range_value_t<T>>>;
 
 /// Type implements the custom MPI resize protocol (preferred over plain resize()).
 template <typename T>
-concept has_mpi_resize_for_receive = requires(T& t, std::ptrdiff_t n) {
-    t.mpi_resize_for_receive(n);
-};
+concept has_mpi_resize_for_receive = requires(T& t, std::ptrdiff_t n) { t.mpi_resize_for_receive(n); };
 
 /// Type is a standard resizable container (e.g. std::vector).
 template <typename T>
@@ -93,6 +113,16 @@ concept buffer_traits_has_type = requires(T const& t) {
     { buffer_traits<T>::type(t) } -> std::convertible_to<MPI_Datatype>;
 };
 
+template <typename T>
+concept buffer_traits_has_sizev = requires(T const& t) {
+    { buffer_traits<T>::sizev(t) } -> count_range;
+};
+
+template <typename T>
+concept buffer_traits_has_displs = requires(T const& t) {
+    { buffer_traits<T>::displs(t) } -> count_range;
+};
+
 // ──────────────────────────────────────────────────────────────────────────────
 // size() dispatch — priority: buffer_traits > mpi_size() member > std::ranges::size
 // ──────────────────────────────────────────────────────────────────────────────
@@ -107,8 +137,7 @@ constexpr auto size(T&& t) {
 }
 
 template <typename T>
-    requires (!buffer_traits_has_size<std::remove_cvref_t<T>>)
-          && has_mpi_compatible_size_member<T>
+    requires(!buffer_traits_has_size<std::remove_cvref_t<T>>) && has_mpi_compatible_size_member<T>
 constexpr auto size(T&& t) {
     return t.mpi_size();
 }
@@ -117,10 +146,8 @@ constexpr auto size(T&& t) {
 // types, breaking the ADL cycle: std::ranges::size → ADL kamping::ranges::size
 // → std::ranges::sized_range → std::ranges::size → … (circular hard error).
 template <typename T>
-    requires (!buffer_traits_has_size<std::remove_cvref_t<T>>)
-          && (!has_mpi_compatible_size_member<T>)
-          && (!std::derived_from<std::remove_cvref_t<T>, view_interface_base>)
-          && std::ranges::sized_range<T>
+    requires(!buffer_traits_has_size<std::remove_cvref_t<T>>) && (!has_mpi_compatible_size_member<T>)
+            && (!std::derived_from<std::remove_cvref_t<T>, view_interface_base>) && std::ranges::sized_range<T>
 constexpr auto size(T&& t) {
     return std::ranges::size(std::forward<T>(t));
 }
@@ -134,15 +161,14 @@ constexpr auto size(T&& t) {
 // ──────────────────────────────────────────────────────────────────────────────
 
 template <typename T>
-    requires (buffer_traits_has_const_data<std::remove_cvref_t<T>> || buffer_traits_has_data<std::remove_cvref_t<T>>)
+    requires(buffer_traits_has_const_data<std::remove_cvref_t<T>> || buffer_traits_has_data<std::remove_cvref_t<T>>)
 constexpr auto data(T&& t) {
     return buffer_traits<std::remove_cvref_t<T>>::data(std::forward<T>(t));
 }
 
 template <typename T>
-    requires (!buffer_traits_has_const_data<std::remove_cvref_t<T>>)
-          && (!buffer_traits_has_data<std::remove_cvref_t<T>>)
-          && has_mpi_compatible_data_member<T>
+    requires(!buffer_traits_has_const_data<std::remove_cvref_t<T>>) && (!buffer_traits_has_data<std::remove_cvref_t<T>>)
+            && has_mpi_compatible_data_member<T>
 constexpr auto data(T&& t) {
     return t.mpi_data();
 }
@@ -150,11 +176,9 @@ constexpr auto data(T&& t) {
 // std::ranges::data has no ADL step so no circular dependency risk, but the
 // !derived_from guard is added for consistency with the size() overload.
 template <typename T>
-    requires (!buffer_traits_has_const_data<std::remove_cvref_t<T>>)
-          && (!buffer_traits_has_data<std::remove_cvref_t<T>>)
-          && (!has_mpi_compatible_data_member<T>)
-          && (!std::derived_from<std::remove_cvref_t<T>, view_interface_base>)
-          && std::ranges::contiguous_range<T>
+    requires(!buffer_traits_has_const_data<std::remove_cvref_t<T>>) && (!buffer_traits_has_data<std::remove_cvref_t<T>>)
+            && (!has_mpi_compatible_data_member<T>) && (!std::derived_from<std::remove_cvref_t<T>, view_interface_base>)
+            && std::ranges::contiguous_range<T>
 constexpr auto data(T&& t) {
     return std::ranges::data(std::forward<T>(t));
 }
@@ -170,18 +194,40 @@ constexpr auto type(T&& t) {
 }
 
 template <typename T>
-    requires (!buffer_traits_has_type<std::remove_cvref_t<T>>)
-          && has_mpi_compatible_type_member<T>
+    requires(!buffer_traits_has_type<std::remove_cvref_t<T>>) && has_mpi_compatible_type_member<T>
 constexpr auto type(T&& t) {
     return t.mpi_type();
 }
 
 template <typename T>
-    requires (!buffer_traits_has_type<std::remove_cvref_t<T>>)
-          && (!has_mpi_compatible_type_member<T>)
-          && range_of_builtin_mpi_type<T>
+    requires(!buffer_traits_has_type<std::remove_cvref_t<T>>) && (!has_mpi_compatible_type_member<T>)
+            && range_of_builtin_mpi_type<T>
 constexpr auto type(T&& /* t */) {
     return builtin_type<std::remove_cvref_t<std::ranges::range_value_t<T>>>::data_type();
+}
+
+template <typename T>
+    requires buffer_traits_has_sizev<std::remove_cvref_t<T>>
+constexpr auto sizev(T&& t) {
+    return buffer_traits<std::remove_cvref_t<T>>::sizev(t);
+}
+
+template <typename T>
+    requires(!buffer_traits_has_sizev<std::remove_cvref_t<T>>) && has_mpi_compatible_sizev_member<T>
+constexpr auto sizev(T&& t) {
+    return t.mpi_sizev();
+}
+
+template <typename T>
+    requires buffer_traits_has_displs<std::remove_cvref_t<T>>
+constexpr auto displs(T&& t) {
+    return buffer_traits<std::remove_cvref_t<T>>::displs(t);
+}
+
+template <typename T>
+    requires(!buffer_traits_has_displs<std::remove_cvref_t<T>>) && has_mpi_compatible_displs_member<T>
+constexpr auto displs(T&& t) {
+    return t.mpi_displs();
 }
 
 /// Resize t to hold n MPI elements before a receive. Dispatches to:
@@ -193,7 +239,7 @@ void resize_for_receive(T& t, std::ptrdiff_t n) {
 }
 
 template <typename T>
-    requires (!has_mpi_resize_for_receive<T>) && has_resize<T>
+    requires(!has_mpi_resize_for_receive<T>) && has_resize<T>
 void resize_for_receive(T& t, std::ptrdiff_t n) {
     t.resize(static_cast<std::size_t>(n));
 }
