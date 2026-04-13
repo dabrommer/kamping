@@ -60,7 +60,7 @@ concept has_mpi_compatible_displs_member = requires(std::remove_reference_t<T> c
 
 template <typename T>
 concept range_of_builtin_mpi_type =
-    std::ranges::range<T> && kamping::is_builtin_type_v<std::remove_cvref_t<std::ranges::range_value_t<T>>>;
+    std::ranges::range<T> && kamping::types::is_builtin_type_v<std::remove_cvref_t<std::ranges::range_value_t<T>>>;
 
 /// Type implements the custom MPI resize protocol (preferred over plain resize()).
 template <typename T>
@@ -203,7 +203,7 @@ template <typename T>
     requires(!buffer_traits_has_type<std::remove_cvref_t<T>>) && (!has_mpi_compatible_type_member<T>)
             && range_of_builtin_mpi_type<T>
 constexpr auto type(T&& /* t */) {
-    return builtin_type<std::remove_cvref_t<std::ranges::range_value_t<T>>>::data_type();
+    return kamping::types::builtin_type<std::remove_cvref_t<std::ranges::range_value_t<T>>>::data_type();
 }
 
 template <typename T>
