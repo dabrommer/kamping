@@ -42,7 +42,7 @@ inline constexpr bool enable_borrowed_buffer<with_type_view<Base>> = enable_borr
 namespace views {
 
 inline constexpr kamping::ranges::adaptor<1, decltype([](auto&& r, MPI_Datatype type) {
-    return kamping::ranges::with_type_view(kamping::ranges::all(std::forward<decltype(r)>(r)), type);
+    return kamping::ranges::with_type_view(std::forward<decltype(r)>(r), type);
 })> with_type{};
 
 } // namespace views

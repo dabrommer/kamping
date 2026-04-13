@@ -45,7 +45,7 @@ namespace views {
 // Useful for non-range objects that expose mpi_data() but no size — compose with with_type
 // to build a complete data_buffer. For limiting the element count of a range, prefer std::views::take.
 inline constexpr kamping::ranges::adaptor<1, decltype([](auto&& r, std::ptrdiff_t size) {
-    return kamping::ranges::with_size_view(kamping::ranges::all(std::forward<decltype(r)>(r)), size);
+    return kamping::ranges::with_size_view(std::forward<decltype(r)>(r), size);
 })> with_size{};
 
 } // namespace views

@@ -56,8 +56,8 @@ namespace views {
 
 inline constexpr kamping::ranges::adaptor<1, decltype([](auto&& r, auto&& counts) {
                                               return kamping::ranges::with_counts_view(
-                                                  kamping::ranges::all(std::forward<decltype(r)>(r)),
-                                                  kamping::ranges::all(std::forward<decltype(counts)>(counts))
+                                                  std::forward<decltype(r)>(r),
+                                                  std::forward<decltype(counts)>(counts)
                                               );
                                           })>
     with_counts{};

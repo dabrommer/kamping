@@ -80,7 +80,7 @@ namespace kamping::views {
 inline constexpr struct resize_v_fn : kamping::ranges::adaptor_closure<resize_v_fn> {
     template <typename R>
     constexpr auto operator()(R&& r) const {
-        return kamping::ranges::resize_v_view(kamping::ranges::all(std::forward<R>(r)));
+        return kamping::ranges::resize_v_view(std::forward<R>(r));
     }
 } resize_v{};
 

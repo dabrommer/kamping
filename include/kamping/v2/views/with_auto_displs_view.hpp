@@ -99,8 +99,8 @@ inline constexpr struct with_auto_displs_fn {
         return kamping::ranges::adaptor<1, decltype([](auto&& r, auto&& displs) {
             return kamping::ranges::with_auto_displs_view(
                 kamping::v2::resize,
-                kamping::ranges::all(std::forward<decltype(r)>(r)),
-                kamping::ranges::all(std::forward<decltype(displs)>(displs))
+                std::forward<decltype(r)>(r),
+                std::forward<decltype(displs)>(displs)
             );
         })>{}(Container{});
     }
@@ -115,8 +115,8 @@ inline constexpr struct with_auto_displs_fn {
     constexpr auto operator()(Args&&... args) const {
         return kamping::ranges::adaptor<1, decltype([](auto&& r, auto&& displs) {
             return kamping::ranges::with_auto_displs_view(
-                kamping::ranges::all(std::forward<decltype(r)>(r)),
-                kamping::ranges::all(std::forward<decltype(displs)>(displs))
+                std::forward<decltype(r)>(r),
+                std::forward<decltype(displs)>(displs)
             );
         })>{}(std::forward<Args>(args)...);
     }
@@ -129,8 +129,8 @@ inline constexpr struct with_auto_displs_fn {
         return kamping::ranges::adaptor<1, decltype([](auto&& r, auto&& displs) {
             return kamping::ranges::with_auto_displs_view(
                 kamping::v2::resize,
-                kamping::ranges::all(std::forward<decltype(r)>(r)),
-                kamping::ranges::all(std::forward<decltype(displs)>(displs))
+                std::forward<decltype(r)>(r),
+                std::forward<decltype(displs)>(displs)
             );
         })>{}(std::forward<Args>(args)...);
     }
