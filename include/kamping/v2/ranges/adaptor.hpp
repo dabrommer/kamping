@@ -1,10 +1,12 @@
 #pragma once
 
 #include <cstddef>
+#include <ranges>
 #include <tuple>
 #include <utility>
 
 #include "kamping/v2/ranges/adaptor_closure.hpp"
+#include "kamping/v2/ranges/all.hpp"
 
 namespace kamping::ranges {
 
@@ -23,9 +25,19 @@ struct bound_adaptor : adaptor_closure<bound_adaptor<Fn, BoundArgs...>> {
           bound_(std::move(bound)) {}
 
     template <typename T>
-    constexpr auto operator()(T&& val) const {
+    constexpr auto operator()(T&& val) const& {
         return std::apply(
             [&](auto const&... args) { return fn_(std::forward<T>(val), args...); },
+            bound_
+        );
+    }
+
+    // Rvalue overload: moves stored arguments out so the resulting view takes ownership
+    // rather than holding a ref_view into this closure's (about-to-be-destroyed) storage.
+    template <typename T>
+    constexpr auto operator()(T&& val) && {
+        return std::apply(
+            [&](auto&&... args) { return fn_(std::forward<T>(val), std::move(args)...); },
             bound_
         );
     }
@@ -44,17 +56,66 @@ struct adaptor {
     [[no_unique_address]] Fn fn_;
 
     /// Partial application: bind ExtraArgs arguments, return a pipeable closure.
+    /// Range arguments are stored via all_t — lvalue ranges become ref_view (borrow the original),
+    /// rvalue ranges become owning_view. Non-range arguments are stored by value (std::decay_t).
     template <typename... Args>
         requires(sizeof...(Args) == ExtraArgs)
     constexpr auto operator()(Args&&... args) const {
-        return bound_adaptor<Fn, std::decay_t<Args>...>(
-            fn_, std::tuple{std::forward<Args>(args)...}
+        auto store = []<typename Arg>(Arg&& arg) -> decltype(auto) {
+            if constexpr (std::ranges::range<std::remove_cvref_t<Arg>>)
+                return kamping::ranges::all(std::forward<Arg>(arg));
+            else
+                return std::decay_t<Arg>(std::forward<Arg>(arg));
+        };
+        return bound_adaptor<Fn, decltype(store(std::forward<Args>(args)))...>(
+            fn_, std::tuple{store(std::forward<Args>(args))...}
         );
     }
 
     /// Full call: first argument is the value, remaining ExtraArgs are forwarded to fn_.
     template <typename T, typename... Args>
         requires(sizeof...(Args) == ExtraArgs)
+    constexpr auto operator()(T&& val, Args&&... args) const {
+        return fn_(std::forward<T>(val), std::forward<Args>(args)...);
+    }
+};
+
+/// Variable-arity range adaptor factory, supporting MinExtraArgs to MaxExtraArgs extra arguments.
+/// Disambiguates partial vs. full call by checking whether the first argument satisfies
+/// std::ranges::range: if it does (and the remaining args are in [Min,Max]), it is a full call;
+/// otherwise all args are treated as extra args for partial application.
+///
+/// This makes tag-based overloads natural: non-range tags count as extra args, not as the value.
+///
+/// Usage:  inline constexpr var_adaptor<1, 2, decltype([](auto&& r, auto&&... extra) {
+///             if constexpr (sizeof...(extra) == 2) { /* resize path */ }
+///             else { /* normal path */ }
+///         })> with_auto_displs{};
+template <std::size_t MinExtraArgs, std::size_t MaxExtraArgs, typename Fn>
+struct var_adaptor {
+    [[no_unique_address]] Fn fn_;
+
+    /// Partial application: sizeof...(Args) in [Min, Max] and first arg (if any) is not a range.
+    template <typename... Args>
+        requires(sizeof...(Args) >= MinExtraArgs && sizeof...(Args) <= MaxExtraArgs
+                 && !(sizeof...(Args) >= 1
+                      && std::ranges::range<std::remove_cvref_t<std::tuple_element_t<0, std::tuple<Args...>>>>))
+    constexpr auto operator()(Args&&... args) const {
+        auto store = []<typename Arg>(Arg&& arg) -> decltype(auto) {
+            if constexpr (std::ranges::range<std::remove_cvref_t<Arg>>)
+                return kamping::ranges::all(std::forward<Arg>(arg));
+            else
+                return std::decay_t<Arg>(std::forward<Arg>(arg));
+        };
+        return bound_adaptor<Fn, decltype(store(std::forward<Args>(args)))...>(
+            fn_, std::tuple{store(std::forward<Args>(args))...}
+        );
+    }
+
+    /// Full call: first argument is the range value, remaining sizeof...(Args) in [Min, Max].
+    template <typename T, typename... Args>
+        requires(std::ranges::range<std::remove_cvref_t<T>> && sizeof...(Args) >= MinExtraArgs
+                 && sizeof...(Args) <= MaxExtraArgs)
     constexpr auto operator()(T&& val, Args&&... args) const {
         return fn_(std::forward<T>(val), std::forward<Args>(args)...);
     }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <concepts>
+#include <ranges>
 #include <type_traits>
 #include <utility>
 
@@ -12,6 +13,15 @@ struct adaptor_closure_base {};
 /// Checks whether T is a pipe-able closure (i.e., something produced by partial application of an adaptor).
 template <typename T>
 concept is_adaptor_closure = std::derived_from<std::remove_cvref_t<T>, adaptor_closure_base>;
+
+/// Detects external range adaptor closures (e.g. std::views::take(2)) by duck typing:
+/// they are not ranges themselves but are callable with a range argument.
+/// Used to route closure | closure to composition rather than closure(value).
+template <typename T>
+concept is_external_closure =
+    !std::ranges::range<std::remove_cvref_t<T>> &&
+    !is_adaptor_closure<T> &&
+    requires(std::remove_cvref_t<T> const& t, std::ranges::empty_view<int> r) { t(r); };
 
 template <typename First, typename Second>
 struct composed_closure;
@@ -25,14 +35,23 @@ template <typename Derived>
 struct adaptor_closure : adaptor_closure_base {
     // val | closure  →  closure(val)
     template <typename T>
-        requires(!is_adaptor_closure<T>)
+        requires(!is_adaptor_closure<T>) && (!is_external_closure<T>)
     friend constexpr auto operator|(T&& val, Derived const& self) {
         return self(std::forward<T>(val));
     }
 
+    // val | rvalue_closure  →  std::move(closure)(val)
+    // Moves stored arguments out of temporary closures so that views take ownership
+    // rather than holding a dangling ref_view into the closure's storage.
+    template <typename T>
+        requires(!is_adaptor_closure<T>) && (!is_external_closure<T>)
+    friend constexpr auto operator|(T&& val, Derived&& self) {
+        return std::move(self)(std::forward<T>(val));
+    }
+
     // closure | closure  →  composed_closure that applies them left-to-right
     template <typename Other>
-        requires is_adaptor_closure<Other>
+        requires is_adaptor_closure<Other> || is_external_closure<Other>
     friend constexpr auto operator|(Other other, Derived self) {
         return composed_closure<Other, Derived>(std::move(other), std::move(self));
     }

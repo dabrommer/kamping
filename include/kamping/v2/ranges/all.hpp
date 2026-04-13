@@ -34,23 +34,44 @@ public:
     constexpr explicit owning_view(T&& r) noexcept(std::is_nothrow_move_constructible_v<T>)
         : r_(std::move(r)) {}
 
+    owning_view(owning_view const&)            = delete;
+    owning_view& operator=(owning_view const&) = delete;
+    owning_view(owning_view&&)                 = default;
+    owning_view& operator=(owning_view&&)      = default;
+
     constexpr T&       base() &      noexcept { return r_; }
     constexpr T const& base() const& noexcept { return r_; }
     constexpr T&&      base() &&     noexcept { return std::move(r_); }
 };
 
-/// Wraps a value in the appropriate view:
-///   - already a kamping view (inherits view_interface_base) → pass through unchanged
-///   - lvalue reference                                       → ref_view
-///   - rvalue                                                 → owning_view
+/// Wraps a value in the appropriate view, mirroring std::views::all extended for kamping:
+///   - std::ranges::view (span, string_view, …) → copy/move through; no extra wrapping to
+///     avoid libc++ constraint circularity bugs with these types.
+///   - kamping view (derived from view_interface_base, may be owning/non-copyable):
+///       lvalue → ref_view (borrow), rvalue → move through (no wrapping needed).
+///   - any other lvalue                          → ref_view
+///   - any other rvalue                          → owning_view
 template <typename R>
 constexpr auto all(R&& r) {
-    if constexpr (std::derived_from<std::remove_cvref_t<R>, view_interface_base>)
-        return std::forward<R>(r);
+    using T = std::remove_cvref_t<R>;
+    if constexpr (std::derived_from<T, view_interface_base>) {
+        // Kamping views (checked first — in libc++, view_interface makes them satisfy
+        // std::ranges::view too, so we must intercept them before that branch).
+        // Copyable kamping views (e.g. ref_view): copy/move through, same as std views.
+        // Non-copyable kamping views (e.g. owning_view): lvalue → borrow via ref_view,
+        //   rvalue → move through (no wrapping needed).
+        if constexpr (std::is_lvalue_reference_v<R> && !std::copyable<T>)
+            return ref_view<T>{r};
+        else
+            return std::forward<R>(r);
+    } else if constexpr (std::ranges::view<T>)
+        // std library views (span, string_view, …): lightweight non-owning, always copyable.
+        // Copy/move through without wrapping (avoids libc++ constraint circularity bugs).
+        return T(std::forward<R>(r));
     else if constexpr (std::is_lvalue_reference_v<R>)
         return ref_view<std::remove_reference_t<R>>{r};
     else
-        return owning_view<std::remove_cvref_t<R>>{std::forward<R>(r)};
+        return owning_view<T>{std::forward<R>(r)};
 }
 
 template <typename R>
