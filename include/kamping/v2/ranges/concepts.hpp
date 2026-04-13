@@ -83,6 +83,23 @@ concept has_commit_counts = requires(T& t) { t.commit_counts(); };
 template <typename T>
 concept deferred_recv_buf = requires(T& t, std::ptrdiff_t n) { t.set_recv_count(n); };
 
+template <typename T>
+concept has_set_comm_size = requires(T& t, int n) { t.set_comm_size(n); };
+
+/// Recv buffer for variadic collectives whose per-rank counts are not known upfront.
+/// The infer() protocol:
+///   1. set_comm_size(comm_size)       — pre-allocate the counts buffer
+///   2. MPI writes into counts().data() — fill per-rank counts directly
+///   3. commit_counts()               — signal counts are ready; invalidate cached state
+template <typename T>
+concept deferred_recv_buf_v =
+    has_counts_accessor<T> &&
+    has_commit_counts<T> &&
+    has_set_comm_size<T> &&
+    requires(T& t) {
+        { std::ranges::data(t.counts()) } -> std::convertible_to<int*>;
+    };
+
 // ──────────────────────────────────────────────────────────────────────────────
 // enable_borrowed_buffer — opt-in trait for non-owning buffer types.
 //

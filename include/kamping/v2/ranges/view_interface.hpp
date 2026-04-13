@@ -134,6 +134,12 @@ struct view_interface : public view_interface_base, public std::ranges::view_int
         derived().base().commit_counts();
     }
 
+    void set_comm_size(int n)
+        requires kamping::ranges::has_set_comm_size<decltype(derived().base())>
+    {
+        derived().base().set_comm_size(n);
+    }
+
     constexpr bool displs_monotonic() const
         requires kamping::ranges::has_monotonic_displs<decltype(derived().base())>
     {
