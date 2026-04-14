@@ -11,6 +11,7 @@
 #include "kamping/v2/ranges/ranges.hpp"
 #include "kamping/v2/tags.hpp"
 #include "kamping/v2/views.hpp"
+#include "kamping/v2/views/ref_single_view.hpp"
 
 int main(int, char*[]) {
     kamping::Environment<> env;
@@ -257,8 +258,8 @@ int main(int, char*[]) {
         if (kamping::world_rank() == 0) {
             val = 42;
         }
-        auto result = kamping::v2::bcast(val | kamping::views::serialize);
-        std::println("[R{}] bcast result={}", kamping::world_rank(), *result);
+        kamping::v2::bcast(kamping::views::ref_single(val));
+        std::println("[R{}] bcast result={}", kamping::world_rank(), val);
     }
 
     return 0;
