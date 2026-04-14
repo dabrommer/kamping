@@ -10,6 +10,7 @@
 
 #include "kamping/builtin_types.hpp"
 #include "kamping/v2/ranges/adaptor_closure.hpp"
+#include "kamping/v2/ranges/concepts.hpp"
 
 namespace kamping::ranges {
 
@@ -26,7 +27,7 @@ namespace kamping::ranges {
 template <typename T>
 class kokkos_view {
     static constexpr bool is_owning = !std::is_lvalue_reference_v<T>;
-    using view_type                = std::remove_reference_t<T>;
+    using view_type                 = std::remove_reference_t<T>;
 
     static_assert(Kokkos::is_view<view_type>::value, "kokkos_view requires a Kokkos::View type");
 
@@ -38,22 +39,21 @@ class kokkos_view {
     // Ensure deep_copy can run in the wrapped view's exec space
     static_assert(
         Kokkos::SpaceAccessibility<execution_space, memory_space>::accessible,
-        "kokkos_view requires the execution space to access the wrapped view memory space");
+        "kokkos_view requires the execution space to access the wrapped view memory space"
+    );
     // Ensure the given view is in HostSpace (for now)
     static_assert(
         Kokkos::SpaceAccessibility<Kokkos::HostSpace, memory_space>::accessible,
-        "kokkos_view currently host-accessible memory space");
+        "kokkos_view currently host-accessible memory space"
+    );
 
-    using packed_view_t = Kokkos::View<
-        typename view_type::non_const_data_type,
-        Kokkos::LayoutRight,
-        memory_space>;
+    using packed_view_t = Kokkos::View<typename view_type::non_const_data_type, Kokkos::LayoutRight, memory_space>;
 
     mutable stored_t      base_;
     mutable packed_view_t packed_storage_;
 
-    mutable bool   packed_       = false;
-    mutable bool   needs_unpack_ = false;
+    mutable bool packed_       = false;
+    mutable bool needs_unpack_ = false;
 
     view_type& base_ref() const noexcept {
         if constexpr (is_owning)
@@ -63,7 +63,7 @@ class kokkos_view {
     }
 
     static packed_view_t make_packed(view_type const& v) {
-        execution_space exec;
+        execution_space   exec;
         std::string const label = std::string(v.label()) + "-kamping-kokkos-view";
 
         return [&exec, &v, &label]<std::size_t... Is>(std::index_sequence<Is...>) {
@@ -87,25 +87,38 @@ class kokkos_view {
     }
 
 public:
-    explicit kokkos_view(view_type& view) requires(!is_owning) : base_(&view) {}
+    explicit kokkos_view(view_type& view)
+        requires(!is_owning)
+        : base_(&view) {}
 
-    explicit kokkos_view(view_type&& view) requires(is_owning) : base_(std::move(view)) {}
+    explicit kokkos_view(view_type&& view)
+        requires(is_owning)
+        : base_(std::move(view)) {}
 
     view_type& operator*() {
-        if (needs_unpack_) unpack();
+        if (needs_unpack_)
+            unpack();
         return base_ref();
     }
 
     view_type const& operator*() const {
-        if (needs_unpack_) unpack();
+        if (needs_unpack_)
+            unpack();
         return base_ref();
     }
 
-    view_type*       operator->() { return std::addressof(**this); }
-    view_type const* operator->() const { return std::addressof(**this); }
+    view_type* operator->() {
+        return std::addressof(**this);
+    }
+    view_type const* operator->() const {
+        return std::addressof(**this);
+    }
 
     void set_recv_count(std::ptrdiff_t n)
-    requires(view_type::rank == 1 && requires(view_type& v, typename view_type::size_type m) {Kokkos::resize(v, m);}) {
+        requires(
+            view_type::rank == 1 && requires(view_type& v, typename view_type::size_type m) { Kokkos::resize(v, m); }
+        )
+    {
         auto const current_size = static_cast<std::ptrdiff_t>(base_ref().size());
         if (n == current_size) {
             return;
@@ -122,12 +135,15 @@ public:
         return static_cast<std::ptrdiff_t>(base_ref().size());
     }
 
-    MPI_Datatype mpi_type() const {
-        return kamping::builtin_type<scalar_type>::data_type();
+    MPI_Datatype mpi_type()
+        requires has_mpi_type<std::span<scalar_type>>
+    {
+        return kamping::ranges::type(std::span{packed_storage_.data(), packed_storage_.size()});
     }
 
     void* mpi_data() const {
-        if (!needs_unpack_ && !packed_) pack();
+        if (!needs_unpack_ && !packed_)
+            pack();
         return packed_storage_.data();
     }
 };
@@ -163,6 +179,4 @@ auto unpack() {
     return unpack<T>("kamping-kokkos-unpack");
 }
 
-
 } // namespace kamping::views
-
