@@ -264,6 +264,107 @@ in `kamping::core::`, making it clear they are part of the core contract rather 
 adaptors. This also avoids the oddity of `kamping::ranges::size` shadowing `std::ranges::size`
 in translation units that use both.
 
+## Reduction operation handling
+
+Reduction collectives (`reduce`, `allreduce`, `scan`, `exscan`) need to resolve a user-provided
+op argument to an `MPI_Op` at the point of the MPI call. The design mirrors the buffer accessor
+system (`kamping::core::type/size/data`) so op resolution is externalized rather than baked into
+each collective's implementation.
+
+### `builtin_mpi_handle` — add `MPI_Op`
+
+- [ ] Add `MPI_Op` to the `builtin_mpi_handle` concept in `native_handle.hpp` so that raw
+  `MPI_Op` values pass through `bridge::native_handle` unchanged, consistent with `MPI_Comm`,
+  `MPI_Datatype`, etc.
+
+### `native_handle_traits` for kamping-types op/type wrappers
+
+- [ ] Specialize `bridge::native_handle_traits` for `kamping::types::ScopedOp`,
+  `kamping::types::ScopedFunctorOp`, and `kamping::types::ScopedCallbackOp` so they satisfy
+  `convertible_to_mpi_handle<MPI_Op>` and can be passed directly to `core::` collectives.
+- [ ] Specialize `bridge::native_handle_traits` for `kamping::types::ScopedDatatype` so it
+  satisfies `convertible_to_mpi_handle<MPI_Datatype>` — the only kamping-types datatype wrapper
+  that needs to reach the core layer (committed derived types; complex type pools belong in v2).
+
+### `kamping::core::op_traits<Op, SBuf>` — buffer-aware customization point
+
+`kamping-types` keeps `mpi_operation_traits<Op, T>` element-type-centric (standalone module,
+no buffer concept dependency). The core layer owns a separate buffer-aware trait:
+
+```cpp
+// primary — not a builtin by default
+template <typename Op, data_buffer SBuf>
+struct op_traits {
+    static constexpr bool is_builtin = false;
+};
+
+// default for ranges — delegates to kamping-types
+template <typename Op, std::ranges::range SBuf>
+    requires types::mpi_operation_traits<Op, std::ranges::range_value_t<SBuf>>::is_builtin
+struct op_traits<Op, SBuf> {
+    static constexpr bool is_builtin = true;
+    static MPI_Op op() {
+        return types::mpi_operation_traits<Op, std::ranges::range_value_t<SBuf>>::op();
+    }
+};
+```
+
+Users can specialize `kamping::core::op_traits<Op, SBuf>` non-intrusively for custom buffer+op
+combinations, parallel to `kamping::ranges::buffer_traits<T>` for buffer types.
+
+### `mpi_op_for<Op, SBuf>` concept
+
+```cpp
+template <typename Op, typename SBuf>
+concept mpi_op_for = bridge::convertible_to_mpi_handle<Op, MPI_Op>
+                  || (std::ranges::range<SBuf> && op_traits<Op, SBuf>::is_builtin);
+```
+
+The `std::ranges::range<SBuf>` guard is required because `op_traits`'s default range
+specialization accesses `range_value_t<SBuf>`, which is only valid for range types.
+For raw-pointer / `mpi_span` buffers only `convertible_to_mpi_handle<MPI_Op>` applies —
+builtin functor inference requires a typed range.
+
+### `kamping::core::native_op<SBuf>(op)` — free function customization point
+
+Analogous to `kamping::core::type(buf)` / `kamping::ranges::size(buf)`:
+
+```cpp
+template <data_buffer SBuf, typename Op>
+    requires mpi_op_for<Op, SBuf>
+MPI_Op native_op(Op const& op) {
+    if constexpr (bridge::convertible_to_mpi_handle<Op, MPI_Op>)
+        return bridge::native_handle(op);
+    else
+        return op_traits<Op, SBuf>::op();
+}
+```
+
+`T` is never extracted at the top of `native_op` — `op_traits<Op, SBuf>::op()` is only
+instantiated in the `else` branch, where `mpi_op_for` already guarantees `SBuf` is a range.
+
+### Usage in `core::reduce` (and other reduction collectives)
+
+```cpp
+template <send_buffer SBuf, recv_buffer RBuf, typename Op>
+    requires mpi_op_for<Op, SBuf>
+void reduce(SBuf&& sbuf, RBuf&& rbuf, Op&& op, int root, MPI_Comm comm) {
+    MPI_Reduce(
+        ranges::data(sbuf), ranges::data(rbuf), ranges::size(sbuf),
+        ranges::type(sbuf), native_op<SBuf>(op), root, comm
+    );
+}
+```
+
+No `if constexpr` at the collective level — op resolution is fully encapsulated in `native_op`.
+The same pattern applies to `allreduce`, `scan`, `exscan`.
+
+### v2 responsibility
+
+Custom functor → `MPI_Op` creation (i.e. `ScopedFunctorOp`, `ScopedCallbackOp`) is the
+caller's responsibility at the core level. v2 may provide convenience wrappers that
+create and lifetime-manage these objects before delegating to `core::`.
+
 ## Collectives
 
 - [x] **`core::barrier`** / **`v2::barrier`**
