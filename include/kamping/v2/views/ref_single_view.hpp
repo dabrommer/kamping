@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <memory>
+#include <ranges>
 #include <type_traits>
 
 #include "kamping/v2/ranges/concepts.hpp"
@@ -20,7 +21,7 @@ namespace kamping::ranges {
 ///   kamping::v2::bcast(ref_single(val));   // broadcasts val in-place
 template <typename T>
     requires std::is_object_v<T>
-class ref_single_view : public view_interface_base {
+class ref_single_view : public std::ranges::view_interface<ref_single_view<T>> {
     T* ptr_;
 
 public:
@@ -36,15 +37,15 @@ public:
 
     constexpr T*       data() noexcept { return ptr_; }
     constexpr T const* data() const noexcept { return ptr_; }
-
-    constexpr T&       operator*() noexcept { return *ptr_; }
-    constexpr T const& operator*() const noexcept { return *ptr_; }
 };
 
 template <typename T>
 inline constexpr bool enable_borrowed_buffer<ref_single_view<T>> = true;
 
 } // namespace kamping::ranges
+
+template <typename T>
+inline constexpr bool std::ranges::enable_borrowed_range<kamping::ranges::ref_single_view<T>> = true;
 
 namespace kamping::views {
 
