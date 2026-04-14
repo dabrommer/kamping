@@ -14,14 +14,14 @@ namespace kamping::ranges {
 /// returns the stored count immediately; mpi_data() triggers the resize on first call.
 /// mpi_type() is forwarded from the base via view_interface.
 template <typename Base>
-class resize_buf_view : public view_interface<resize_buf_view<Base>> {
+class resize_view : public view_interface<resize_view<Base>> {
     Base           base_;
     std::ptrdiff_t recv_count_ = 0;
     bool           needs_resize_ = false;
 
 public:
     template <typename R>
-    explicit resize_buf_view(R&& base) : base_(kamping::ranges::all(std::forward<R>(base))) {}
+    explicit resize_view(R&& base) : base_(kamping::ranges::all(std::forward<R>(base))) {}
 
     constexpr Base&       base() &      noexcept { return base_; }
     constexpr Base const& base() const& noexcept { return base_; }
@@ -49,10 +49,10 @@ public:
 };
 
 template <typename R>
-resize_buf_view(R&&) -> resize_buf_view<kamping::ranges::all_t<R>>;
+resize_view(R&&) -> resize_view<kamping::ranges::all_t<R>>;
 
 template <typename Base>
-inline constexpr bool enable_borrowed_buffer<resize_buf_view<Base>> = enable_borrowed_buffer<Base>;
+inline constexpr bool enable_borrowed_buffer<resize_view<Base>> = enable_borrowed_buffer<Base>;
 
 } // namespace kamping::ranges
 
@@ -64,7 +64,7 @@ namespace kamping::views {
 inline constexpr struct resize_fn : kamping::ranges::adaptor_closure<resize_fn> {
     template <typename R>
     constexpr auto operator()(R&& r) const {
-        return kamping::ranges::resize_buf_view(std::forward<R>(r));
+        return kamping::ranges::resize_view(std::forward<R>(r));
     }
 } resize{};
 

@@ -18,7 +18,7 @@ namespace ranges {
 template <typename Base, count_range Displs, bool resize = false>
     requires has_mpi_sizev<Base> && std::ranges::output_range<Displs, int>
              && (!resize || has_resize<Displs> || has_mpi_resize_for_receive<Displs>)
-class with_auto_displs_view : public kamping::ranges::view_interface<with_auto_displs_view<Base, Displs>> {
+class auto_displs_view : public kamping::ranges::view_interface<auto_displs_view<Base, Displs>> {
     Base           base_;
     mutable Displs displs_;
     mutable bool   needs_to_compute_displs_ = true;
@@ -32,12 +32,12 @@ public:
     }
 
     template <typename R, typename C>
-    with_auto_displs_view(R&& base, C&& displs)
+    auto_displs_view(R&& base, C&& displs)
         : base_(kamping::ranges::all(std::forward<R>(base))),
           displs_(kamping::ranges::all(std::forward<C>(displs))) {}
 
     template <typename R, typename C>
-    with_auto_displs_view(kamping::v2::resize_t, R&& base, C&& displs)
+    auto_displs_view(kamping::v2::resize_t, R&& base, C&& displs)
         : base_(kamping::ranges::all(std::forward<R>(base))),
           displs_(kamping::ranges::all(std::forward<C>(displs))) {}
 
@@ -78,26 +78,26 @@ public:
 };
 
 template <typename R, typename C>
-with_auto_displs_view(R&&, C&&) -> with_auto_displs_view<kamping::ranges::all_t<R>, kamping::ranges::all_t<C>>;
+auto_displs_view(R&&, C&&) -> auto_displs_view<kamping::ranges::all_t<R>, kamping::ranges::all_t<C>>;
 
 template <typename R, typename C>
-with_auto_displs_view(kamping::v2::resize_t, R&&, C&&)
-    -> with_auto_displs_view<kamping::ranges::all_t<R>, kamping::ranges::all_t<C>, true>;
+auto_displs_view(kamping::v2::resize_t, R&&, C&&)
+    -> auto_displs_view<kamping::ranges::all_t<R>, kamping::ranges::all_t<C>, true>;
 
 template <typename Base, typename Displs>
-inline constexpr bool enable_borrowed_buffer<with_auto_displs_view<Base, Displs>> =
+inline constexpr bool enable_borrowed_buffer<auto_displs_view<Base, Displs>> =
     enable_borrowed_buffer<Base> && enable_borrowed_buffer<Displs>;
 
 } // namespace ranges
 
 namespace views {
 
-inline constexpr struct with_auto_displs_fn {
+inline constexpr struct auto_displs_fn {
     // 0-arg: owned default container (std::vector<int>), auto-resized on mpi_displs()
     template <typename Container = std::vector<int>>
     constexpr auto operator()() const {
         return kamping::ranges::adaptor<1, decltype([](auto&& r, auto&& displs) {
-            return kamping::ranges::with_auto_displs_view(
+            return kamping::ranges::auto_displs_view(
                 kamping::v2::resize,
                 std::forward<decltype(r)>(r),
                 std::forward<decltype(displs)>(displs)
@@ -114,7 +114,7 @@ inline constexpr struct with_auto_displs_fn {
                      kamping::v2::resize_t>)
     constexpr auto operator()(Args&&... args) const {
         return kamping::ranges::adaptor<1, decltype([](auto&& r, auto&& displs) {
-            return kamping::ranges::with_auto_displs_view(
+            return kamping::ranges::auto_displs_view(
                 std::forward<decltype(r)>(r),
                 std::forward<decltype(displs)>(displs)
             );
@@ -127,14 +127,14 @@ inline constexpr struct with_auto_displs_fn {
         requires(sizeof...(Args) >= 1)
     constexpr auto operator()(kamping::v2::resize_t, Args&&... args) const {
         return kamping::ranges::adaptor<1, decltype([](auto&& r, auto&& displs) {
-            return kamping::ranges::with_auto_displs_view(
+            return kamping::ranges::auto_displs_view(
                 kamping::v2::resize,
                 std::forward<decltype(r)>(r),
                 std::forward<decltype(displs)>(displs)
             );
         })>{}(std::forward<Args>(args)...);
     }
-} with_auto_displs{};
+} auto_displs{};
 
 } // namespace views
 } // namespace kamping

@@ -16,7 +16,7 @@ namespace kamping::ranges {
 /// directly into counts().data() via MPI — no copy needed.
 ///
 /// Displacements are intentionally not provided here; compose with with_displs()
-/// or with_auto_displs() to attach them.
+/// or auto_displs() to attach them.
 ///
 /// Template parameters:
 ///   Counts — the wrapped counts range (after all() wrapping)
@@ -28,7 +28,7 @@ namespace kamping::ranges {
 ///   MPI_Allgather(&send_count, 1, MPI_INT, counts_buf.counts().data(), 1, MPI_INT, comm);
 ///   counts_buf.commit_counts();
 ///   // mpi_sizev() is now valid; pass counts_buf.counts() to with_counts()
-///   // or pipe with with_displs / with_auto_displs to attach displacements
+///   // or pipe with with_displs / auto_displs to attach displacements
 template <count_range Counts, bool resize = false>
     requires(!resize || has_resize<Counts> || has_mpi_resize_for_receive<Counts>)
 class auto_counts_view {
@@ -88,7 +88,7 @@ namespace kamping::views {
 ///   auto_counts(resize, buf) — user-provided buffer, resized by infer() via set_comm_size()
 ///
 /// The returned view is passed to a collective as the recv_counts argument.
-/// Pipe with with_displs() or with_auto_displs() to attach displacements.
+/// Pipe with with_displs() or auto_displs() to attach displacements.
 inline constexpr struct auto_counts_fn {
     /// 0-arg: construct an owned Container (default std::vector<int>) that will be
     /// auto-resized by infer() via set_comm_size().

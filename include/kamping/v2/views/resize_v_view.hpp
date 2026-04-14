@@ -11,7 +11,7 @@
 
 namespace kamping::ranges {
 
-/// Variadic-receive counterpart of resize_buf_view.
+/// Variadic-receive counterpart of resize_view.
 ///
 /// Wraps a base buffer that already exposes mpi_sizev() (per-process counts) and
 /// mpi_displs() (per-process displacements). On mpi_data() the underlying data
@@ -23,7 +23,7 @@ namespace kamping::ranges {
 /// non-monotonic displacements.
 ///
 /// Typical composition:
-///   recv_buf | with_counts(auto_counts()) | with_auto_displs(resize, displs) | resize_v
+///   recv_buf | with_counts(auto_counts()) | auto_displs(resize, displs) | resize_v
 ///   recv_buf | with_counts(auto_counts()) | with_displs(user_displs)         | resize_v
 template <typename Base>
     requires has_mpi_sizev<Base> && has_mpi_displs<Base>
@@ -79,9 +79,9 @@ inline constexpr bool enable_borrowed_buffer<resize_v_view<Base>> = enable_borro
 namespace kamping::views {
 
 /// Wraps a base buffer (which must already provide mpi_sizev() and mpi_displs()
-/// via e.g. with_counts | with_auto_displs or with_counts | with_displs) so the
+/// via e.g. with_counts | auto_displs or with_counts | with_displs) so the
 /// underlying data buffer is resized to the correct total size on mpi_data().
-/// Use as: buf | with_counts(...) | with_auto_displs(...) | resize_v
+/// Use as: buf | with_counts(...) | auto_displs(...) | resize_v
 inline constexpr struct resize_v_fn : kamping::ranges::adaptor_closure<resize_v_fn> {
     template <typename R>
     constexpr auto operator()(R&& r) const {
