@@ -80,36 +80,24 @@ inline constexpr bool enable_borrowed_buffer<auto_counts_view<Counts, resize>> =
 
 namespace kamping::views {
 
-/// Factory for auto_counts_view.
-///
-/// Usage:
-///   auto_counts()         — owned std::vector<int>, resized by infer() via set_comm_size()
-///   auto_counts(buf)      — user-provided buffer, no resize (must be pre-sized)
-///   auto_counts(resize, buf) — user-provided buffer, resized by infer() via set_comm_size()
-///
-/// The returned view is passed to a collective as the recv_counts argument.
-/// Pipe with with_displs() or auto_displs() to attach displacements.
-inline constexpr struct auto_counts_fn {
-    /// 0-arg: construct an owned Container (default std::vector<int>) that will be
-    /// auto-resized by infer() via set_comm_size().
-    template <typename Container = std::vector<int>>
-    constexpr auto operator()() const {
-        return kamping::ranges::auto_counts_view(kamping::v2::resize, Container{});
-    }
+/// 0-arg: owned Container (default std::vector<int>) auto-resized by infer() via set_comm_size().
+template <typename Container = std::vector<int>>
+constexpr auto auto_counts() {
+    return kamping::ranges::auto_counts_view(kamping::v2::resize, Container{});
+}
 
-    /// 1-arg: user-provided buffer, no resize (buffer must already have correct size).
-    template <typename C>
-        requires std::ranges::range<std::remove_cvref_t<C>>
-    constexpr auto operator()(C&& counts) const {
-        return kamping::ranges::auto_counts_view(std::forward<C>(counts));
-    }
+/// 1-arg: user-provided buffer, no resize (buffer must already have correct size).
+template <typename C>
+    requires std::ranges::range<std::remove_cvref_t<C>>
+constexpr auto auto_counts(C&& counts) {
+    return kamping::ranges::auto_counts_view(std::forward<C>(counts));
+}
 
-    /// 2-arg: resize tag + user-provided buffer; infer() will resize via set_comm_size().
-    template <typename C>
-        requires std::ranges::range<std::remove_cvref_t<C>>
-    constexpr auto operator()(kamping::v2::resize_t, C&& counts) const {
-        return kamping::ranges::auto_counts_view(kamping::v2::resize, std::forward<C>(counts));
-    }
-} auto_counts{};
+/// 2-arg: resize tag + user-provided buffer; infer() will resize via set_comm_size().
+template <typename C>
+    requires std::ranges::range<std::remove_cvref_t<C>>
+constexpr auto auto_counts(kamping::v2::resize_t, C&& counts) {
+    return kamping::ranges::auto_counts_view(kamping::v2::resize, std::forward<C>(counts));
+}
 
 } // namespace kamping::views

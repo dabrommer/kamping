@@ -92,49 +92,45 @@ inline constexpr bool enable_borrowed_buffer<auto_displs_view<Base, Displs>> =
 
 namespace views {
 
-inline constexpr struct auto_displs_fn {
-    // 0-arg: owned default container (std::vector<int>), auto-resized on mpi_displs()
-    template <typename Container = std::vector<int>>
-    constexpr auto operator()() const {
-        return kamping::ranges::adaptor<1, decltype([](auto&& r, auto&& displs) {
-            return kamping::ranges::auto_displs_view(
-                kamping::v2::resize,
-                std::forward<decltype(r)>(r),
-                std::forward<decltype(displs)>(displs)
-            );
-        })>{}(Container{});
-    }
+// 0-arg: owned Container (default std::vector<int>), auto-resized on mpi_displs().
+template <typename Container = std::vector<int>>
+constexpr auto auto_displs() {
+    return kamping::ranges::adaptor<1, decltype([](auto&& r, auto&& displs) {
+        return kamping::ranges::auto_displs_view(
+            kamping::v2::resize,
+            std::forward<decltype(r)>(r),
+            std::forward<decltype(displs)>(displs)
+        );
+    })>{}(Container{});
+}
 
-    // (container) partial or (r, container) full — no resize.
-    // count-based (adaptor<1>): single arg is always the displs container, not a piped range.
-    template <typename... Args>
-        requires(sizeof...(Args) >= 1
-                 && !std::same_as<
-                     std::remove_cvref_t<std::tuple_element_t<0, std::tuple<Args...>>>,
-                     kamping::v2::resize_t>)
-    constexpr auto operator()(Args&&... args) const {
-        return kamping::ranges::adaptor<1, decltype([](auto&& r, auto&& displs) {
-            return kamping::ranges::auto_displs_view(
-                std::forward<decltype(r)>(r),
-                std::forward<decltype(displs)>(displs)
-            );
-        })>{}(std::forward<Args>(args)...);
-    }
+// (container) partial or (r, container) full — no resize.
+template <typename... Args>
+    requires(sizeof...(Args) >= 1
+             && !std::same_as<
+                 std::remove_cvref_t<std::tuple_element_t<0, std::tuple<Args...>>>,
+                 kamping::v2::resize_t>)
+constexpr auto auto_displs(Args&&... args) {
+    return kamping::ranges::adaptor<1, decltype([](auto&& r, auto&& displs) {
+        return kamping::ranges::auto_displs_view(
+            std::forward<decltype(r)>(r),
+            std::forward<decltype(displs)>(displs)
+        );
+    })>{}(std::forward<Args>(args)...);
+}
 
-    // (resize, container) partial or (resize, r, container) full — with resize.
-    // Strip the resize tag, then delegate to adaptor<1> for count-based disambiguation.
-    template <typename... Args>
-        requires(sizeof...(Args) >= 1)
-    constexpr auto operator()(kamping::v2::resize_t, Args&&... args) const {
-        return kamping::ranges::adaptor<1, decltype([](auto&& r, auto&& displs) {
-            return kamping::ranges::auto_displs_view(
-                kamping::v2::resize,
-                std::forward<decltype(r)>(r),
-                std::forward<decltype(displs)>(displs)
-            );
-        })>{}(std::forward<Args>(args)...);
-    }
-} auto_displs{};
+// (resize, container) partial or (resize, r, container) full — with resize.
+template <typename... Args>
+    requires(sizeof...(Args) >= 1)
+constexpr auto auto_displs(kamping::v2::resize_t, Args&&... args) {
+    return kamping::ranges::adaptor<1, decltype([](auto&& r, auto&& displs) {
+        return kamping::ranges::auto_displs_view(
+            kamping::v2::resize,
+            std::forward<decltype(r)>(r),
+            std::forward<decltype(displs)>(displs)
+        );
+    })>{}(std::forward<Args>(args)...);
+}
 
 } // namespace views
 } // namespace kamping
