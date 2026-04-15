@@ -4,7 +4,8 @@
 
 #include <mpi.h>
 
-#include "kamping/v2/p2p/mprobe.hpp"
+#include "kamping/v2/comm_op.hpp"
+#include "kamping/v2/native_handle.hpp"
 #include "kamping/v2/ranges/concepts.hpp"
 #include "kamping/v2/ranges/ranges.hpp"
 #include "kamping/v2/status.hpp"
@@ -20,19 +21,6 @@
 
 namespace kamping {
 
-// ---- Operation tags ---------------------------------------------------------
-// Each tag is a distinct empty type used for tag-dispatch in infer() overloads.
-// They live in kamping::comm_op:: to avoid clashing with the kamping::recv_tag()
-// named-parameter factory in named_parameters.hpp.
-
-namespace comm_op {
-struct recv {};
-struct bcast {};
-struct allgather {};
-struct alltoall {};
-struct sendrecv {};
-} // namespace comm_op
-
 // ---- Default infer() overloads ----------------------------------------------
 
 template <kamping::ranges::recv_buffer RBuf>
@@ -40,7 +28,7 @@ auto infer(comm_op::recv, RBuf& rbuf, int source, int tag, MPI_Comm comm) {
     if constexpr (kamping::ranges::deferred_recv_buf<RBuf>) {
         v2::status  status;
         MPI_Message message = MPI_MESSAGE_NULL;
-        core::mprobe(source, tag, comm, &message, status);
+        MPI_Mprobe(source, tag, comm, &message, bridge::native_handle_ptr(status));
         rbuf.set_recv_count(static_cast<std::ptrdiff_t>(status.count(kamping::ranges::type(rbuf))));
         return message;
     }
@@ -71,6 +59,18 @@ void infer(comm_op::allgather, SBuf const& sbuf, RBuf& rbuf, MPI_Comm comm) {
         int comm_size = 0;
         MPI_Comm_size(comm, &comm_size);
         rbuf.set_recv_count(comm_size * static_cast<std::ptrdiff_t>(kamping::ranges::size(sbuf)));
+    }
+}
+
+template <kamping::ranges::send_buffer SBuf, kamping::ranges::recv_buffer_v RBuf>
+void infer(comm_op::allgatherv, SBuf const& sbuf, RBuf& rbuf, MPI_Comm comm) {
+    if constexpr (kamping::ranges::deferred_recv_buf_v<RBuf>) {
+        int comm_size = 0;
+        MPI_Comm_size(comm, &comm_size);
+        rbuf.set_comm_size(comm_size);
+	int send_count = static_cast<int>(kamping::ranges::size(sbuf));
+	MPI_Allgather(&send_count, 1, MPI_INT, kamping::ranges::data(rbuf.counts()), 1, MPI_INT, comm);
+        rbuf.commit_counts();
     }
 }
 
