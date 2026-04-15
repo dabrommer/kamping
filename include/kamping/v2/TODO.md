@@ -365,10 +365,95 @@ Custom functor → `MPI_Op` creation (i.e. `ScopedFunctorOp`, `ScopedCallbackOp`
 caller's responsibility at the core level. v2 may provide convenience wrappers that
 create and lifetime-manage these objects before delegating to `core::`.
 
+## Sentinels (`include/kamping/v2/tags.hpp`)
+
+Three zero-overhead sentinel buffer types. All implemented.
+
+- [x] **`v2::inplace`** (`inplace_t`) — passes `MPI_IN_PLACE` / 0 / `MPI_DATATYPE_NULL`; satisfies
+  `send_buffer` and `recv_buffer`. Used as the send argument for inplace collective overloads
+  and available for explicit use in two-buffer forms.
+- [x] **`v2::null_buf`** (`null_buf_t`) — passes `nullptr` / 0 / `MPI_DATATYPE_NULL`; satisfies
+  `send_buffer` and `recv_buffer`. Used internally by non-root shorthand overloads; also
+  exposed for users who want explicit uniform call sites across root and non-root.
+- [x] **`v2::bottom`** (`bottom_t`) — passes `MPI_BOTTOM` only; exposes `mpi_data()` but **not**
+  `mpi_size()` or `mpi_type()`. Not a `data_buffer` on its own — must be composed with
+  `views::with_type` and `views::with_size` before use. The existing `view_interface`
+  conditional forwarding already handles partial bases correctly; no view changes needed.
+
+  ```cpp
+  v2::send(v2::bottom | views::with_type(my_abs_type) | views::with_size(1), dest, comm);
+  ```
+
+## `recv_v<T>()` helper
+
+- [ ] **`v2::recv_v<T, Cont = std::vector>()`** — factory for the common variadic recv buffer idiom:
+
+  ```cpp
+  template <typename T, template <typename...> class Cont = std::vector>
+  auto recv_v() {
+      return Cont<T>{} | views::auto_counts() | views::auto_displs() | views::resize_v;
+  }
+  ```
+
+  Usage: `v2::allgatherv(local_data, v2::recv_v<int>(), comm)`. Saves users from spelling
+  out the full pipe chain at every variadic collective call site.
+
 ## Collectives
 
 - [x] **`core::barrier`** / **`v2::barrier`**
 - [x] **`core::bcast`** / **`v2::bcast`**
-- [ ] **Blocking**: `allreduce`, `allgather`, `allgatherv`, `alltoall`, `alltoallv`, `scatter`, `scatterv`, `gather`, `gatherv`, `reduce`, `scan`, `exscan`
+- [x] **`core::allgather`** / **`v2::allgather`**
+- [x] **`core::allgatherv`** / **`v2::allgatherv`**
+- [ ] **Blocking**: `allreduce`, `alltoall`, `alltoallv`, `scatter`, `scatterv`, `gather`, `gatherv`, `reduce`, `scan`, `exscan`
 - [ ] **Non-blocking**: `iallreduce`, `iallgather`, `iallgatherv`, `ialltoall`, `ialltoallv`, `iscatter`, `iscatterv`, `igather`, `igatherv`, `ireduce`, `iscan`, `iexscan`, `ibarrier`
 - Follow the same layering as p2p: `core::` wraps MPI directly, `v2::` handles inference and result types
+
+### Collective interface design
+
+#### Inplace single-buffer overloads (symmetric collectives only)
+
+Single-buffer = inplace, but **only** for collectives where all ranks have the same
+relationship to the buffer. For asymmetric collectives (gather, scatter, reduce) the buffer
+plays different roles on root vs non-root (different semantics, different sizes) — no
+single-buffer form there.
+
+| Collective | Single-buffer form | Notes |
+|---|---|---|
+| `allreduce(buf, op, comm)` | ✓ | All ranks transform in place |
+| `scan(buf, op, comm)` | ✓ | All ranks transform in place |
+| `exscan(buf, op, comm)` | ✓ | All ranks transform in place |
+| `allgather(buf, comm)` | ✓ | All ranks: local data already at `rank*n` slot, rest filled in |
+| `gather` / `scatter` / `reduce` | ✗ | Buffer role differs by rank — always two-buffer |
+
+The inplace allgather precondition (local data pre-placed at `rank * n`) is implicit and
+documented but not enforced. For allreduce/scan/exscan, in-place is fully transparent.
+
+`v2::inplace` sentinel is still available as an explicit send argument in two-buffer forms
+for advanced use; most users never need it.
+
+#### Asymmetric collectives: gather / scatter / reduce
+
+Three overload tiers — all ranks always call `infer()` regardless of which overload is used,
+since `infer()` may itself be collective (e.g. `MPI_Bcast` inside scatter's infer to
+distribute the per-rank count). Branching logic lives inside `infer()`.
+
+```
+gather(sbuf, root, comm)              // non-root shorthand — null_buf internally
+gather(sbuf, rbuf, root, comm)        // full two-buffer; null_buf on non-root, real rbuf on root
+
+scatter(rbuf, root, comm)             // non-root shorthand
+scatter(sbuf, rbuf, root, comm)       // full two-buffer
+
+reduce(sbuf, op, root, comm)          // non-root shorthand
+reduce(sbuf, rbuf, op, root, comm)    // full two-buffer
+```
+
+`v2::null_buf` is exposed and usable in the two-buffer form for users who prefer uniform
+call sites (root and non-root both call the 4-arg form, non-root passes `null_buf`).
+
+**Rejected alternatives:**
+- `std::optional<RBuf>` overload: does not eliminate the rank-check branch (moves it to
+  construction site); deferred resize inside an optional is unspellable; extra `infer`
+  overloads for every collective. Not worth the complexity.
+- Single-buffer inplace for gather/scatter/reduce: buffer means recv on root, send on
+  non-root — inconsistent role, inconsistent size. Rejected for asymmetric collectives.
