@@ -95,3 +95,23 @@ TEST(V2AllgathervTest, UserProvidedCountsBuffer) {
     // counts should have been filled by infer()
     EXPECT_EQ(counts[rank], rank + 1);
 }
+
+// User-provided counts buffer (no auto-resize of counts).
+TEST(V2AllgathervTest, ExplicitCountsAutoDisplsNoResize) {
+    int rank, size;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
+
+    std::vector<int> send_data(rank + 1, rank);
+    std::vector<int> recv_data(size * (size + 1) / 2);
+    std::vector<int> counts(size); // pre-sized, no auto-resize
+    std::ranges::iota(counts, 1);
+
+    kamping::v2::allgatherv(send_data, recv_data | kamping::views::with_counts(counts) | kamping::views::auto_displs());
+
+    std::vector<int> expected;
+    for (int r = 0; r < size; ++r) {
+        expected.insert(expected.end(), r + 1, r);
+    }
+    EXPECT_EQ(recv_data, expected);
+}

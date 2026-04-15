@@ -40,15 +40,9 @@ auto infer(comm_op::bcast, SRBuf& srbuf, int root, MPI_Comm comm) {
         MPI_Comm_rank(comm, &rank);
         auto size_on_root = rank == root ? kamping::ranges::size(srbuf) : 0;
         auto size_view    = std::views::single(size_on_root);
-        MPI_Bcast(
-            kamping::ranges::data(size_view),
-            static_cast<int>(kamping::ranges::size(size_view)),
-            kamping::ranges::type(size_view),
-            root,
-            comm
-        );
+        MPI_Bcast(&size_on_root, 1, MPI_INT, root, comm);
         if (rank != root) {
-            srbuf.set_recv_count(size_view.front());
+            srbuf.set_recv_count(size_on_root);
         }
     }
 }
@@ -68,8 +62,8 @@ void infer(comm_op::allgatherv, SBuf const& sbuf, RBuf& rbuf, MPI_Comm comm) {
         int comm_size = 0;
         MPI_Comm_size(comm, &comm_size);
         rbuf.set_comm_size(comm_size);
-	int send_count = static_cast<int>(kamping::ranges::size(sbuf));
-	MPI_Allgather(&send_count, 1, MPI_INT, kamping::ranges::data(rbuf.counts()), 1, MPI_INT, comm);
+        int send_count = static_cast<int>(kamping::ranges::size(sbuf));
+        MPI_Allgather(&send_count, 1, MPI_INT, kamping::ranges::data(rbuf.counts()), 1, MPI_INT, comm);
         rbuf.commit_counts();
     }
 }
