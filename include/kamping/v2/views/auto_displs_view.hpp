@@ -5,6 +5,7 @@
 #include <span>
 #include <vector>
 
+#include "kamping/kassert/kassert.hpp"
 #include "kamping/v2/ranges/adaptor.hpp"
 #include "kamping/v2/ranges/all.hpp"
 #include "kamping/v2/ranges/concepts.hpp"
