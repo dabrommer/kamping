@@ -11,214 +11,128 @@
 // You should have received a copy of the GNU Lesser General Public License along with KaMPIng.  If not, see
 // <https://www.gnu.org/licenses/>.
 
+#include <iostream>
 #include <numeric>
+#include <random>
+#include <unordered_set>
 #include <vector>
 
 #include <mpi.h>
 
-#include "../../tests/helpers_for_testing.hpp"
 #include "helpers_for_examples.hpp"
+#include "kamping/checking_casts.hpp"
 #include "kamping/collectives/alltoall.hpp"
 #include "kamping/communicator.hpp"
-#include "kamping/data_buffers/displs_pipes.hpp"
-#include "kamping/data_buffers/pipes.hpp"
-#include "kamping/data_buffers/resize_pipes.hpp"
-#include "kamping/data_buffers/size_v_pipes.hpp"
 #include "kamping/environment.hpp"
+#include "kamping/plugin/alltoall_dispatch.hpp"
+#include "kamping/plugin/alltoall_sparse.hpp"
+#include "kamping/span.hpp"
+
+// Helper function used in the example below.
+// Generates num_partners distinct random communication partners \in [0,comm_size).
+auto random_comm_partners(int comm_size, size_t num_partners) {
+    std::random_device              rd;
+    std::mt19937                    gen(rd());
+    std::uniform_int_distribution<> dis(0, comm_size - 1);
+    std::unordered_set<int>         comm_partners;
+
+    while (comm_partners.size() < num_partners) {
+        comm_partners.insert(dis(gen));
+    }
+
+    return comm_partners;
+}
 
 int main() {
     using namespace kamping;
-    using namespace kamping::pipes;
+    using namespace plugin;
+    using namespace dispatch_alltoall;
 
-    kamping::Environment  e;
-    kamping::Communicator comm;
+    // Enable the SparseAlltoall, GridCommunicator and DispatchAlltoall plugins.
+    using Comm = Communicator<std::vector, plugin::SparseAlltoall, plugin::GridCommunicator, plugin::DispatchAlltoall>;
 
-    int    rank = comm.rank_signed();
-    size_t size = comm.size();
+    kamping::Environment e;
+    Comm                 comm;
 
-    // Preparing send and recv data
-    std::vector<int> send_counts(size);
-    std::vector<int> recv_counts(size);
-    std::vector<int> send_displs(size);
-    std::vector<int> recv_displs(size);
+    { // KaMPIng wraps the classic MPI alltoallv
+        // Rank i sends i values to rank 0, i+1 values to rank 1, ...
+        std::vector<int> counts_per_rank(comm.size());
+        std::iota(counts_per_rank.begin(), counts_per_rank.end(), comm.rank_signed());
 
-    // Send i + rank + 5 elements to process i
-    int total_send = 0;
-    for (int i = 0; i < size; ++i) {
-        send_counts[i] = i + rank + 5;
-        send_displs[i] = total_send;
-        total_send += send_counts[i];
-    }
-    std::vector<int> send_vec(total_send, rank);
-    int              total_recv = 0;
-    for (int i = 0; i < size; ++i) {
-        recv_counts[i] = i + rank + 5;
-        recv_displs[i] = total_recv;
-        total_recv += recv_counts[i];
-    }
+        int                 num_elements = std::reduce(counts_per_rank.begin(), counts_per_rank.end(), 0);
+        std::vector<size_t> input(asserting_cast<size_t>(num_elements));
+        // Rank i sends it own rank to all others
+        std::fill(input.begin(), input.end(), comm.rank());
 
-    // The following shows how to use kamping's pipes with alltoallv
-    {
-        // The explicit approach, using the previously computed send/recv size_v and displs
-        std::vector<int> recv_buf(total_recv);
-        auto [sent, received] = comm.alltoallv(
-            send_vec | with_size_v(send_counts) | with_displs(send_displs),
-            recv_buf | with_size_v(recv_counts) | with_displs(recv_displs)
-        );
+        { // Exchange the data; compute the recv counts automatically.
+            auto output = comm.alltoallv(send_buf(input), send_counts(counts_per_rank));
+            print_on_root(" --- alltoallv I --- ", comm);
+            print_result_on_root(output, comm);
+        }
+
+        { // Exchange the data; compute /and return/ the recv counts automatically.
+            auto [output, receive_counts] =
+                comm.alltoallv(send_buf(input), send_counts(counts_per_rank), recv_counts_out());
+            print_on_root(" --- alltoallv II output --- ", comm);
+            print_result_on_root(output, comm);
+            print_on_root(" --- alltoallv II receive counts --- ", comm);
+            print_result_on_root(receive_counts, comm);
+        }
     }
 
-    {
-        // Use the auto_displs pipe to let kamping implicitly compute the displs
-        std::vector<int> recv_buf(total_recv);
-        auto [sent, received] = comm.alltoallv(
-            send_vec | with_size_v(send_counts) | auto_displs(),
-            recv_buf | with_size_v(recv_counts) | auto_displs()
-        );
-        // The computed displs can be accessed via
-        auto& displs = received.displs();
-    }
+    { // For sparse messages exchanges, KaMPIng provides a specialized algorithm via the SparseAlltoall plugin.
+        // Generate the messages
+        using msg_type = std::vector<double>;
 
-    {
-        // There are some convenience functions to ease the pipe usage:
-        std::vector<int> recv_buf(total_recv);
+        std::unordered_map<int, msg_type> dest_msg_pairs;
+        for (auto const dst: random_comm_partners(comm.size_signed(), comm.size() / 2)) {
+            msg_type msg(comm.rank(), static_cast<double>(comm.rank()));
+            dest_msg_pairs.emplace(dst, std::move(msg));
+        }
 
-        // This will create a vbuf with the given recv_buf, recv_counts and recv_displs
-        make_vbuf(recv_buf, recv_counts, recv_displs);
-        // This overload creates a vbuf using auto_displs
-        make_vbuf(recv_buf, recv_counts);
+        std::unordered_map<int, std::vector<double>> recv_buf;
 
-        // Both of the above with resizing of the recv_buf enabled:
-        make_vbuf_resizing(recv_buf, recv_counts, recv_displs);
-        make_vbuf_resizing(recv_buf, recv_counts);
+        // Define a callback function to receive messages.
+        auto cb = [&](auto const& probed_message) {
+            recv_buf[probed_message.source_signed()] = probed_message.recv();
+        };
 
-        // The functions with auto imply heavier operations, like creating a DataBuffer or using auto_size_v which
-        // requires additional communication This creates a vbuf of type std::vector<int> with auto_size_v and
-        // auto_displs
-        make_vbuf_auto<int>();
-        // If the given type satisfies DataBufferConcept and has .resize a buffer of that type will be created
-        make_vbuf_auto<example_int_range>();
-
-        // Both of the above can be used with an existing recv_count, so no additional communication to exchange the
-        // recv counts is needed
-        make_vbuf_auto<int>(recv_counts);
-        make_vbuf_auto<example_int_range>(recv_counts);
-
-        // They can be used with an existing recv buffer, using auto_size_v and auto_displs:
-        make_vbuf_auto(recv_buf);
-
-        // The same as above with resizing  of the given recv_buf enabled:
-        make_vbuf_auto_resizing(recv_buf);
-    }
-
-    // For simplicity, some of the following examples use this send buffer
-    auto sbuf = send_vec | with_size_v(send_counts) | with_displs(send_displs);
-
-    {
-        // Use the convenience pipe make_vbuf which is the same as recv_buf | with_size_v(...) | with_displs(...)
-        std::vector<int> recv_buf(total_recv);
-        auto [sent, received] = comm.alltoallv(sbuf, make_vbuf(recv_buf, recv_counts, recv_displs));
-    }
-
-    {
-        // A more generic approach is to use an empty recv buffer and use the resize_vbuf pipe to resize it accordingly
-        std::vector<int> recv_buf;
-        auto [sent, received] =
-            comm.alltoallv(sbuf, recv_buf | with_size_v(recv_counts) | auto_displs() | resize_vbuf());
-
-        // The same using the convenience function make_vbuf_resizing:
-        auto [sent_f, received_f] = comm.alltoallv(sbuf, make_vbuf_resizing(recv_buf, recv_counts));
-    }
-
-    {
-        // The recv buffer can be constructed inside the make_vbuf_resizing pipe
-        auto [sent, received] =
-            comm.alltoallv(sbuf, kamping::pipes::make_vbuf_resizing(std::vector<int>(), recv_counts));
-        // To retrieve the recv buffer, it can be moved out using extract_buffer:
-        auto result = received.extract_buffer();
-    }
-
-    {
-        // Use the convenience pipe make_vbuf_auto to implicitly create a std::vector of the given type as recv buffer
-        auto [sent, received] = comm.alltoallv(sbuf, kamping::pipes::make_vbuf_auto<int>(recv_counts));
-
-        auto result = received.extract_buffer();
-    }
-
-    {
-        // Kamping can compute the recv_size_v using additional implicit communication
-        std::vector<int> recv_buf(total_recv);
-        auto [sent, received] = comm.alltoallv(sbuf, recv_buf | auto_size_v() | auto_displs());
-
-        // The same using the convenience function make_vbuf_auto given a recv buffer
-        auto [sent_f, received_f] = comm.alltoallv(sbuf, make_vbuf_auto(recv_buf));
-    }
-
-    {
-        using namespace kamping::pipes;
-        // Using the convenience pipe make_vbuf_auto<T> the recv buffer will be a std::vector of the given type.
-        auto result = comm.alltoallv(sbuf, make_vbuf_auto<int>()).second.extract_buffer();
-    }
-
-    {
-        // The recv buffer can be moved into the pipe
-        std::vector<int> recv_buf(total_recv);
-        auto [sent, received] = comm.alltoallv(sbuf, kamping::pipes::make_vbuf(std::move(recv_buf), recv_counts));
-
-        // A ref to the recv buffer can be retrieved using:
-        auto& recv_buf_out = received.buffer();
-
-        // The recv buffer can also be moved out using:
-        auto recv_buf_out_move = received.extract_buffer();
-    }
-
-    {
-        // The type of the computed displs can be user defined:
-        std::vector<int> recv_buf;
-        auto [sent, received] = comm.alltoallv(
-            sbuf,
-            recv_buf | with_size_v(recv_counts) | auto_displs<example_int_range>() | resize_vbuf()
+        // Exchange the messages
+        comm.alltoallv_sparse(
+            plugin::sparse_alltoall::sparse_send_buf(dest_msg_pairs),
+            plugin::sparse_alltoall::on_message(cb)
         );
 
-        // The computed example_int_range can be accessed via
-        auto& displs = received.displs();
+        print_on_root(" --- Sparse alltoallv --- ", comm);
+        if (comm.is_root()) {
+            for (auto const& [source, msg]: recv_buf) {
+                print_result("source: " + std::to_string(source), comm);
+                print_result(msg, comm);
+                print_result("---", comm);
+            }
+        }
     }
 
-    {
-        // The displs can be computed into an existing container. Kamping won't resize the displs container by default,
-        // so either it is large enough or the ResizePolicy is used
-        std::vector<int> recv_buf;
-        std::vector<int> displs;
-        auto [sent, received] = comm.alltoallv(
-            sbuf,
-            recv_buf | with_size_v(recv_counts) | auto_displs<BufferResizePolicy::resize_to_fit>(displs) | resize_vbuf()
-        );
+    { // The DispatchAlltoall plugin decides whether to use the GridCommunicator or the builtin alltoallv depending on
+      // the size and number of messages.
+        std::vector<double> const data(comm.size(), static_cast<double>(comm.rank()));
+        std::vector<int> const    counts(comm.size(), 1);
+
+        { // Use the provided default thresholds.
+            [[maybe_unused]] auto [output, receive_counts] =
+                comm.alltoallv_dispatch(send_buf(data), send_counts(counts), recv_counts_out());
+        }
+
+        { // Set a custom threshold for the maximum bottleneck send communication volume for when to switch from
+            // grid to builtin alltoall.
+            [[maybe_unused]] auto [output, receive_counts] = comm.alltoallv_dispatch(
+                send_buf(data),
+                send_counts(counts),
+                comm_volume_threshold(10),
+                recv_counts_out()
+            );
+        }
     }
 
-    {
-        // If the displs are known, they can be directly set using with_displs:
-        std::vector<int> recv_buf;
-        auto [sent, received] =
-            comm.alltoallv(sbuf, recv_buf | with_size_v(recv_counts) | with_displs(recv_displs) | resize_vbuf());
-    }
-
-    {
-        // If the displs are known, they can be moved into with_displs:
-        std::vector<int> recv_buf;
-        auto [sent, received] = comm.alltoallv(
-            sbuf,
-            recv_buf | with_size_v(recv_counts) | with_displs(std::move(recv_displs)) | resize_vbuf()
-        );
-
-        auto& displs = received.displs();
-    }
-
-    {
-        // Using a non-copyable container as recv buffer:
-        testing::NonCopyableOwnContainer<int> copy_test(100);
-        auto [sent, received] = comm.alltoallv(sbuf, std::move(copy_test) | with_size_v(recv_counts) | auto_displs());
-
-        auto copy_test_out = received.extract_buffer();
-    }
-
-    return 0;
+    return EXIT_SUCCESS;
 }

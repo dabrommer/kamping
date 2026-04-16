@@ -20,7 +20,6 @@
 #include "kamping/assertion_levels.hpp"
 #include "kamping/checking_casts.hpp"
 #include "kamping/collectives/collectives_helpers.hpp"
-#include "kamping/comm_helper/infer_rbuf_vals_from.hpp"
 #include "kamping/comm_helper/is_same_on_all_ranks.hpp"
 #include "kamping/communicator.hpp"
 #include "kamping/data_buffer.hpp"
@@ -455,39 +454,4 @@ auto kamping::Communicator<DefaultContainerType, Plugins...>::allgatherv(Args...
         std::move(recv_type)
     );
 }
-
-template <
-    template <typename...>
-    typename DefaultContainerType,
-    template <typename, template <typename...> typename>
-    typename... Plugins>
-template <kamping::SendDataBuffer SBuff, kamping::RecvDataBuffer RBuff>
-auto kamping::Communicator<DefaultContainerType, Plugins...>::allgather(SBuff&& sbuf, RBuff&& rbuf) const {
-    infer<CommType::allgather>(sbuf, rbuf, *this);
-
-    size_t send_size = std::ranges::size(sbuf);
-    size_t recv_size = std::ranges::size(rbuf);
-
-    KAMPING_ASSERT(
-        is_same_on_all_ranks(send_size),
-        "All PEs have to send the same number of elements. Use allgatherv, if you want to send a different number "
-        "of elements.",
-        assert::light_communication
-    );
-
-    KAMPING_ASSERT(recv_size >= send_size, "The receive buffer is not large enough", assert::light);
-
-    // error code can be unused if KTHROW is removed at compile time
-    [[maybe_unused]] int err = MPI_Allgather(
-        std::ranges::data(sbuf),
-        asserting_cast<int>(send_size),
-        type(sbuf),
-        std::ranges::data(rbuf),
-        asserting_cast<int>(recv_size / size()),
-        type(rbuf),
-        this->mpi_communicator()
-    );
-    this->mpi_error_hook(err, "MPI_Allgather");
-
-    return std::pair<SBuff, RBuff>(std::forward<SBuff>(sbuf), std::forward<RBuff>(rbuf));
-}
+/// @}

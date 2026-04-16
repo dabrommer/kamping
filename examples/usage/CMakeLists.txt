@@ -54,22 +54,6 @@ add_executable(example_sendrecv sendrecv_example.cpp)
 target_link_libraries(example_sendrecv kamping)
 target_compile_options(example_sendrecv PRIVATE ${KAMPING_WARNING_FLAGS})
 
-add_executable(example_mdspan mdspan_example.cpp)
-target_link_libraries(example_mdspan kamping)
-target_compile_options(example_mdspan PRIVATE ${KAMPING_WARNING_FLAGS})
-
-add_executable(example_adapter adapter_example.cpp)
-target_link_libraries(example_adapter kamping)
-target_compile_options(example_adapter PRIVATE ${KAMPING_WARNING_FLAGS})
-
-add_executable(example_adapter_alltoallv alltoallv_adapter_example.cpp)
-target_link_libraries(example_adapter_alltoallv kamping)
-target_compile_options(example_adapter_alltoallv PRIVATE ${KAMPING_WARNING_FLAGS})
-
-add_executable(example_recv recv_example.cpp)
-target_link_libraries(example_recv kamping)
-target_compile_options(example_recv PRIVATE ${KAMPING_WARNING_FLAGS})
-
 if (KAMPING_ENABLE_SERIALIZATION)
     add_executable(example_serialization serialization_example.cpp)
     target_link_libraries(example_serialization kamping cereal::cereal)
@@ -80,23 +64,3 @@ add_executable(example_paper paper_example.cpp)
 target_link_libraries(example_paper kamping)
 # these examples generate some warning due to conciseness, therefore we do not enable warnings
 # target_compile_options(example_paper PRIVATE ${KAMPING_WARNING_FLAGS})
-
-# find_package(KokkosComm REQUIRED)
-FetchContent_Declare(
-  Kokkos
-  URL https://github.com/kokkos/kokkos/releases/download/5.0.2/kokkos-5.0.2.tar.gz
-  URL_HASH SHA256=188817bb452ca805ee8701f1c5adbbb4fb83dc8d1c50624566a18a719ba0fa5e
-  OVERRIDE_FIND_PACKAGE
-  SYSTEM
-)
-FetchContent_Declare(
-  KokkosComm
-  GIT_REPOSITORY https://github.com/kamping-site/kokkos-comm.git
-  GIT_TAG develop
-  SYSTEM
-)
-FetchContent_MakeAvailable(Kokkos KokkosComm)
-
-add_executable(example_kokkos kokkos_example.cpp)
-target_link_libraries(example_kokkos kamping KokkosComm::KokkosComm)
-target_compile_options(example_kokkos PRIVATE ${KAMPING_WARNING_FLAGS})
