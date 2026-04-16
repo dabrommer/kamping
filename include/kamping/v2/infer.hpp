@@ -75,6 +75,25 @@ void infer(comm_op::alltoall, SBuf const& sbuf, RBuf& rbuf, MPI_Comm /* comm */)
     }
 }
 
+template <kamping::ranges::send_buffer_v SBuf, kamping::ranges::recv_buffer_v RBuf>
+void infer(comm_op::alltoallv, SBuf const& sbuf, RBuf& rbuf, MPI_Comm comm) {
+    if constexpr (kamping::ranges::deferred_recv_buf_v<RBuf>) {
+        int comm_size = 0;
+        MPI_Comm_size(comm, &comm_size);
+        rbuf.set_comm_size(comm_size);
+        MPI_Alltoall(
+            std::ranges::data(kamping::ranges::sizev(sbuf)),
+            1,
+            MPI_INT,
+            kamping::ranges::data(rbuf.counts()),
+            1,
+            MPI_INT,
+            comm
+        );
+        rbuf.commit_counts();
+    }
+}
+
 template <kamping::ranges::send_buffer SBuf, kamping::ranges::recv_buffer RBuf>
 void infer(
     comm_op::sendrecv, SBuf const& sbuf, RBuf& rbuf, int dest, int send_tag, int source, int recv_tag, MPI_Comm comm
