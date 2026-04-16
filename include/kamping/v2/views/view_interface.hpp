@@ -2,8 +2,8 @@
 
 #include <ranges>
 
-#include "concepts.hpp"
-#include "ranges.hpp"
+#include "kamping/v2/ranges/concepts.hpp"
+#include "kamping/v2/ranges/ranges.hpp"
 
 namespace kamping::ranges {
 namespace detail {

@@ -50,7 +50,7 @@
 #include <type_traits>
 #include <utility>
 
-#include "kamping/v2/ranges/all.hpp"
+#include "kamping/v2/views/all.hpp"
 
 namespace kamping::ranges {
 

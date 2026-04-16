@@ -2,7 +2,7 @@
 
 #include <vector>
 
-#include "kamping/v2/ranges/adaptor.hpp"
+#include "kamping/v2/views/adaptor.hpp"
 #include "kamping/v2/views/auto_counts_view.hpp"
 #include "kamping/v2/views/auto_displs_view.hpp"
 #include "kamping/v2/views/resize_v_view.hpp"

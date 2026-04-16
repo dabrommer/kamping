@@ -9,7 +9,7 @@
 
 #include "kamping/v2/error_handling.hpp"
 #include "kamping/v2/native_handle.hpp"
-#include "kamping/v2/ranges/all.hpp"
+#include "kamping/v2/views/all.hpp"
 #include "kamping/v2/ranges/concepts.hpp"
 #include "kamping/v2/result.hpp"
 

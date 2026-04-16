@@ -3,11 +3,11 @@
 #include <span>
 #include <utility>
 
-#include "kamping/v2/ranges/adaptor.hpp"
-#include "kamping/v2/ranges/all.hpp"
+#include "kamping/v2/views/adaptor.hpp"
+#include "kamping/v2/views/all.hpp"
 #include "kamping/v2/ranges/concepts.hpp"
 #include "kamping/v2/ranges/ranges.hpp"
-#include "kamping/v2/ranges/view_interface.hpp"
+#include "kamping/v2/views/view_interface.hpp"
 
 namespace kamping {
 namespace ranges {
