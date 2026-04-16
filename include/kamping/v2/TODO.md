@@ -3,10 +3,8 @@
 ## Handle types
 
 - [x] **`mpi::experimental::status`** / **`status_view`** — done (`include/mpi/status.hpp`); re-exported from `kamping::v2::` via `include/kamping/v2/status.hpp`
-- [ ] **`kamping::v2::comm`** / **`comm_view`** — owning/non-owning wrappers around `MPI_Comm`
-  - CRTP mixin `comm_accessors` with `.rank()`, `.size()`, `.native()`
-  - `comm_view`: non-owning (e.g. for `MPI_COMM_WORLD`); satisfies `bridge::convertible_to_mpi_handle<MPI_Comm>`
-  - `comm`: owning; calls `MPI_Comm_free` on destruction (for subcommunicators)
+- [x] **`mpi::experimental::comm_view`** — non-owning wrapper (`include/mpi/comm.hpp`); CRTP mixin `comm_accessors` with `.rank()`, `.size()`, `.native()`
+- [ ] **`kamping::v2::comm`** — owning wrapper; calls `MPI_Comm_free` on destruction (for subcommunicators)
 - [ ] **`kamping::v2::request_view`** — non-owning wrapper over `MPI_Request*`
   - Satisfies `bridge::convertible_to_mpi_handle_ptr<MPI_Request>`
   - Counterpart to `iresult` for interop with external request arrays
@@ -111,7 +109,7 @@ include/
 
   `ranges/` now contains only headers that the core layer legitimately needs.
 
-- [ ] **Step 2 — Add `mpi_span` / `mpi_span_v`** (`include/mpi/mpi_span.hpp`) ← TODO
+- [x] **Step 2 — Add `mpi_span` / `mpi_span_v`** (`include/mpi/mpi_span.hpp`) ✓
 
   Concrete non-template structs satisfying the buffer concepts without any view machinery.
   `void*` covers both send (`void const*` is implicit) and recv:
