@@ -1,5 +1,6 @@
 #include "views/auto_counts_view.hpp"  // IWYU pragma: export
 #include "views/auto_displs_view.hpp"  // IWYU pragma: export
+#include "views/auto_recv_v.hpp"       // IWYU pragma: export
 #include "views/flatten_v_view.hpp"    // IWYU pragma: export
 #include "views/ref_single_view.hpp"   // IWYU pragma: export
 #include "views/resize_v_view.hpp"     // IWYU pragma: export
