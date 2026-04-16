@@ -13,7 +13,7 @@ namespace kamping::ranges {
 
 /// Variadic-receive counterpart of resize_view.
 ///
-/// Wraps a base buffer that already exposes mpi_sizev() (per-process counts) and
+/// Wraps a base buffer that already exposes mpi_counts() (per-process counts) and
 /// mpi_displs() (per-process displacements). On mpi_data() the underlying data
 /// buffer is resized to fit all incoming elements.
 ///
@@ -26,7 +26,7 @@ namespace kamping::ranges {
 ///   recv_buf | with_counts(auto_counts()) | auto_displs(resize, displs) | resize_v
 ///   recv_buf | with_counts(auto_counts()) | with_displs(user_displs)         | resize_v
 template <typename Base>
-    requires mpi::experimental::has_mpi_sizev<Base> && mpi::experimental::has_mpi_displs<Base>
+    requires mpi::experimental::has_mpi_counts<Base> && mpi::experimental::has_mpi_displs<Base>
 class resize_v_view : public view_interface<resize_v_view<Base>> {
     Base base_;
 
@@ -41,10 +41,10 @@ public:
         return base_;
     }
 
-    // mpi_sizev, mpi_displs, mpi_type, mpi_count are all forwarded through view_interface.
+    // mpi_counts, mpi_displs, mpi_type, mpi_count are all forwarded through view_interface.
 
     auto mpi_data() {
-        auto const&    counts     = mpi::experimental::sizev(base_);
+        auto const&    counts     = mpi::experimental::counts(base_);
         auto const&    displs     = mpi::experimental::displs(base_);
         auto const*    counts_ptr = std::ranges::data(counts);
         auto const*    displs_ptr = std::ranges::data(displs);
@@ -82,7 +82,7 @@ inline constexpr bool enable_borrowed_buffer<resize_v_view<Base>> = enable_borro
 
 namespace kamping::views {
 
-/// Wraps a base buffer (which must already provide mpi_sizev() and mpi_displs()
+/// Wraps a base buffer (which must already provide mpi_counts() and mpi_displs()
 /// via e.g. with_counts | auto_displs or with_counts | with_displs) so the
 /// underlying data buffer is resized to the correct total size on mpi_data().
 /// Use as: buf | with_counts(...) | auto_displs(...) | resize_v

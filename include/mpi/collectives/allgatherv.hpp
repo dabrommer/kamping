@@ -19,7 +19,7 @@ void allgatherv(SBuf&& sbuf, RBuf&& rbuf, Comm const& comm = MPI_COMM_WORLD) {
         static_cast<int>(mpi::experimental::count(sbuf)),
         mpi::experimental::type(sbuf),
         mpi::experimental::data(rbuf),
-        std::ranges::data(mpi::experimental::sizev(rbuf)),
+        std::ranges::data(mpi::experimental::counts(rbuf)),
         std::ranges::data(mpi::experimental::displs(rbuf)),
         mpi::experimental::type(rbuf),
         mpi::experimental::handle(comm)

@@ -52,17 +52,6 @@ public:
         : base_(kamping::ranges::all(std::forward<R>(base))),
           counts_(kamping::ranges::all(std::forward<C>(counts))) {}
 
-    /// Direct access to the wrapped counts container for ownership transfer and MPI writes.
-    constexpr Counts const& counts() const& {
-        return counts_;
-    }
-    constexpr Counts& counts() & {
-        return counts_;
-    }
-    constexpr Counts&& counts() && {
-        return std::move(counts_);
-    }
-
     /// Pre-allocates or resizes the counts buffer for comm_size processes.
     /// Only resizes when resize=true; otherwise this is a no-op (buffer must already
     /// have the correct size).
@@ -72,11 +61,17 @@ public:
         }
     }
 
-    /// Signal that MPI has finished writing into counts(). Currently a no-op,
+    /// Signal that MPI has finished writing into mpi_counts(). Currently a no-op,
     /// but present as an explicit protocol step for clarity and future extensibility.
     void commit_counts() {}
 
-    std::span<int const> mpi_sizev() const {
+    /// Mutable access — used by infer() to write per-rank counts directly.
+    std::span<int> mpi_counts() {
+        return {std::ranges::data(counts_), std::ranges::size(counts_)};
+    }
+
+    /// Read-only access — used by MPI wrappers after counts are committed.
+    std::span<int const> mpi_counts() const {
         return {counts_};
     }
 };

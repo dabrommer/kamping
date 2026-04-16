@@ -63,7 +63,7 @@ void infer(comm_op::allgatherv, SBuf const& sbuf, RBuf& rbuf, MPI_Comm comm) {
         MPI_Comm_size(comm, &comm_size);
         rbuf.set_comm_size(comm_size);
         int send_count = static_cast<int>(mpi::experimental::count(sbuf));
-        MPI_Allgather(&send_count, 1, MPI_INT, mpi::experimental::data(rbuf.counts()), 1, MPI_INT, comm);
+        MPI_Allgather(&send_count, 1, MPI_INT, std::ranges::data(mpi::experimental::counts(rbuf)), 1, MPI_INT, comm);
         rbuf.commit_counts();
     }
 }
@@ -82,10 +82,10 @@ void infer(comm_op::alltoallv, SBuf const& sbuf, RBuf& rbuf, MPI_Comm comm) {
         MPI_Comm_size(comm, &comm_size);
         rbuf.set_comm_size(comm_size);
         MPI_Alltoall(
-            std::ranges::data(mpi::experimental::sizev(sbuf)),
+            std::ranges::data(mpi::experimental::counts(sbuf)),
             1,
             MPI_INT,
-            mpi::experimental::data(rbuf.counts()),
+            std::ranges::data(mpi::experimental::counts(rbuf)),
             1,
             MPI_INT,
             comm

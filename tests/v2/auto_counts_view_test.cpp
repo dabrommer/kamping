@@ -15,15 +15,14 @@
 TEST(AutoCountsViewTest, SatisfiesExpectedConcepts) {
     std::vector<int> data{1, 2, 3};
 
-    // auto_counts_view satisfies the deferred variadic buffer protocol
     auto view = data | kamping::views::auto_counts();
-    static_assert(mpi::experimental::has_mpi_sizev<decltype(view)>);
+    static_assert(mpi::experimental::has_mpi_counts<decltype(view)>);
+    static_assert(mpi::experimental::has_mpi_counts_mutable<decltype(view)>);
     static_assert(kamping::ranges::has_set_comm_size<decltype(view)>);
     static_assert(kamping::ranges::has_commit_counts<decltype(view)>);
-    static_assert(kamping::ranges::has_counts_accessor<decltype(view)>);
     static_assert(kamping::ranges::deferred_recv_buf_v<decltype(view)>);
 
-    // data/size/type forwarded from base: satisfies recv_buffer
+    // data/count/type forwarded from base: satisfies recv_buffer
     static_assert(mpi::experimental::recv_buffer<decltype(view)>);
 }
 
@@ -41,23 +40,23 @@ TEST(AutoCountsViewTest, FullPipelineSatisfiesRecvBufferV) {
 
 TEST(AutoCountsViewTest, SetCommSizeResizesCountsWhenResizeTrue) {
     std::vector<int> data{10, 20, 30};
-    auto             view = data | kamping::views::auto_counts(); // resize=true (owned container)
+    auto             view = data | kamping::views::auto_counts();
 
-    EXPECT_EQ(std::ranges::size(view.counts()), 0u);
+    EXPECT_EQ(std::ranges::size(mpi::experimental::counts(view)), 0u);
     view.set_comm_size(3);
-    EXPECT_EQ(std::ranges::size(view.counts()), 3u);
+    EXPECT_EQ(std::ranges::size(mpi::experimental::counts(view)), 3u);
 }
 
 TEST(AutoCountsViewTest, SetCommSizeIsNoOpWhenResizeFalse) {
     std::vector<int> data{10, 20, 30};
     std::vector<int> user_counts(3, 0);
-    auto             view = data | kamping::views::auto_counts(user_counts); // resize=false
+    auto             view = data | kamping::views::auto_counts(user_counts);
 
     view.set_comm_size(99); // must not resize
-    EXPECT_EQ(std::ranges::size(view.counts()), 3u);
+    EXPECT_EQ(std::ranges::size(mpi::experimental::counts(view)), 3u);
 }
 
-// ── counts() accessor and mpi_sizev() ─────────────────────────────────────────
+// ── mpi_counts() accessor ─────────────────────────────────────────────────────
 
 TEST(AutoCountsViewTest, CountsAccessorReflectsMpiWrites) {
     std::vector<int> data{1, 2, 3, 4, 5, 6};
@@ -65,12 +64,13 @@ TEST(AutoCountsViewTest, CountsAccessorReflectsMpiWrites) {
     view.set_comm_size(3);
 
     // Simulate MPI writing counts directly into the buffer
-    view.counts()[0] = 1;
-    view.counts()[1] = 2;
-    view.counts()[2] = 3;
+    auto* p = std::ranges::data(mpi::experimental::counts(view));
+    p[0]    = 1;
+    p[1]    = 2;
+    p[2]    = 3;
 
-    std::span<int const> sv = mpi::experimental::sizev(view);
-    EXPECT_EQ((std::vector<int>(sv.begin(), sv.end())), (std::vector<int>{1, 2, 3}));
+    auto sv = mpi::experimental::counts(std::as_const(view));
+    EXPECT_EQ((std::vector<int>(std::ranges::begin(sv), std::ranges::end(sv))), (std::vector<int>{1, 2, 3}));
 }
 
 TEST(AutoCountsViewTest, UserProvidedCountsBuffer) {
@@ -78,11 +78,11 @@ TEST(AutoCountsViewTest, UserProvidedCountsBuffer) {
     std::vector<int> user_counts{4, 5, 6};
     auto             view = data | kamping::views::auto_counts(user_counts);
 
-    std::span<int const> sv = mpi::experimental::sizev(view);
-    EXPECT_EQ((std::vector<int>(sv.begin(), sv.end())), (std::vector<int>{4, 5, 6}));
+    auto sv = mpi::experimental::counts(view);
+    EXPECT_EQ((std::vector<int>(std::ranges::begin(sv), std::ranges::end(sv))), (std::vector<int>{4, 5, 6}));
 
-    // Mutation through the view writes through to the original vector
-    view.counts()[0] = 99;
+    // Mutation through mpi_counts() writes through to the original vector
+    std::ranges::data(mpi::experimental::counts(view))[0] = 99;
     EXPECT_EQ(user_counts[0], 99);
 }
 
@@ -92,7 +92,7 @@ TEST(AutoCountsViewTest, UserProvidedCountsBufferWithResize) {
     auto             view = data | kamping::views::auto_counts(kamping::v2::resize, user_counts);
 
     view.set_comm_size(2);
-    EXPECT_EQ(std::ranges::size(view.counts()), 2u);
+    EXPECT_EQ(std::ranges::size(mpi::experimental::counts(view)), 2u);
 }
 
 // ── commit_counts() ───────────────────────────────────────────────────────────
@@ -101,8 +101,9 @@ TEST(AutoCountsViewTest, CommitCountsIsCallable) {
     std::vector<int> data{1, 2};
     auto             view = data | kamping::views::auto_counts();
     view.set_comm_size(2);
-    view.counts()[0] = 1;
-    view.counts()[1] = 1;
+    auto* p = std::ranges::data(mpi::experimental::counts(view));
+    p[0]    = 1;
+    p[1]    = 1;
     view.commit_counts(); // must not crash; currently a no-op
 }
 
@@ -112,11 +113,10 @@ TEST(AutoCountsViewTest, BaseReturnsUnderlyingDataBuffer) {
     std::vector<int> data{10, 20, 30};
     auto             view = data | kamping::views::auto_counts();
 
-    // begin/end iterate over the data buffer, not the counts
     EXPECT_EQ((std::vector<int>(view.begin(), view.end())), (std::vector<int>{10, 20, 30}));
 }
 
-TEST(AutoCountsViewTest, MpiSizeForwardsFromBase) {
+TEST(AutoCountsViewTest, MpiCountForwardsFromBase) {
     std::vector<int> data{1, 2, 3, 4};
     auto             view = data | kamping::views::auto_counts();
 
@@ -136,14 +136,19 @@ TEST(AutoCountsViewTest, AutoDisplsComputedFromCounts) {
     std::vector<int> data{1, 2, 3, 4, 5, 6};
     auto             view = data | kamping::views::auto_counts();
     view.set_comm_size(3);
-    view.counts()[0] = 1;
-    view.counts()[1] = 2;
-    view.counts()[2] = 3;
+    {
+        auto* p = std::ranges::data(mpi::experimental::counts(view));
+        p[0]    = 1;
+        p[1]    = 2;
+        p[2]    = 3;
+    }
     view.commit_counts();
 
     auto chained = std::move(view) | kamping::views::auto_displs();
-    std::span<int const> displs = mpi::experimental::displs(chained);
-    EXPECT_EQ((std::vector<int>(displs.begin(), displs.end())), (std::vector<int>{0, 1, 3}));
+    auto displs  = mpi::experimental::displs(chained);
+    EXPECT_EQ(
+        (std::vector<int>(std::ranges::begin(displs), std::ranges::end(displs))), (std::vector<int>{0, 1, 3})
+    );
 }
 
 TEST(AutoCountsViewTest, ResizeVResizesDataBufferFromCounts) {
@@ -151,14 +156,15 @@ TEST(AutoCountsViewTest, ResizeVResizesDataBufferFromCounts) {
     auto             rbuf =
         data | kamping::views::auto_counts() | kamping::views::auto_displs() | kamping::views::resize_v;
 
-    // Simulate infer(): set_comm_size → write counts → commit_counts
     rbuf.set_comm_size(3);
-    rbuf.counts()[0] = 2;
-    rbuf.counts()[1] = 3;
-    rbuf.counts()[2] = 1;
+    {
+        auto* p = std::ranges::data(mpi::experimental::counts(rbuf));
+        p[0]    = 2;
+        p[1]    = 3;
+        p[2]    = 1;
+    }
     rbuf.commit_counts();
 
-    // mpi_data() triggers resize to 2+3+1 = 6
     (void)rbuf.mpi_data();
     EXPECT_EQ(data.size(), 6u);
 }

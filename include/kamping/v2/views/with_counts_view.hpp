@@ -44,7 +44,7 @@ public:
         return {std::move(base_), std::move(counts_)};
     }
 
-    std::span<int const> mpi_sizev() const {
+    std::span<int const> mpi_counts() const {
         return {counts_};
     }
 };

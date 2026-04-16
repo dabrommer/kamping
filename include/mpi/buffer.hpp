@@ -80,8 +80,8 @@ concept has_type_member = requires(std::remove_reference_t<T> const& t) {
 };
 
 template <typename T>
-concept has_sizev_member = requires(std::remove_reference_t<T> const& t) {
-    { t.mpi_sizev() } -> count_range;
+concept has_counts_member = requires(std::remove_reference_t<T> const& t) {
+    { t.mpi_counts() } -> count_range;
 };
 
 template <typename T>
@@ -113,8 +113,8 @@ concept traits_has_type = requires(T const& t) {
 };
 
 template <typename T>
-concept traits_has_sizev = requires(T const& t) {
-    { buffer_traits<T>::sizev(t) } -> count_range;
+concept traits_has_counts = requires(T const& t) {
+    { buffer_traits<T>::counts(t) } -> count_range;
 };
 
 template <typename T>
@@ -205,19 +205,23 @@ constexpr auto type(T&& /* t */) {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// sizev() / displs() — priority: buffer_traits > mpi_sizev() / mpi_displs()
+// counts() / displs() — priority: buffer_traits > mpi_counts() / mpi_displs()
+//
+// counts() preserves const: non-const T → mutable span (int*), const T → read-only
+// span (int const*). This allows infer() to write directly into the counts buffer
+// of a non-const deferred buffer, and MPI wrappers to read it const afterwards.
 // ──────────────────────────────────────────────────────────────────────────────
 
 template <typename T>
-    requires detail::traits_has_sizev<std::remove_cvref_t<T>>
-constexpr auto sizev(T&& t) {
-    return buffer_traits<std::remove_cvref_t<T>>::sizev(t);
+    requires detail::traits_has_counts<std::remove_cvref_t<T>>
+constexpr auto counts(T&& t) {
+    return buffer_traits<std::remove_cvref_t<T>>::counts(std::forward<T>(t));
 }
 
 template <typename T>
-    requires(!detail::traits_has_sizev<std::remove_cvref_t<T>>) && detail::has_sizev_member<T>
-constexpr auto sizev(T&& t) {
-    return t.mpi_sizev();
+    requires(!detail::traits_has_counts<std::remove_cvref_t<T>>) && detail::has_counts_member<T>
+constexpr auto counts(T&& t) {
+    return t.mpi_counts();
 }
 
 template <typename T>
@@ -269,8 +273,17 @@ template <typename T>
 concept send_recv_buffer = recv_buffer<T>;
 
 template <typename T>
-concept has_mpi_sizev = requires(T const& t) {
-    { mpi::experimental::sizev(t) } -> count_range;
+concept has_mpi_counts = requires(T const& t) {
+    { mpi::experimental::counts(t) } -> count_range;
+};
+
+/// counts() on a non-const object returns a mutable contiguous range of int —
+/// used by infer() to write per-rank counts directly into the buffer.
+template <typename T>
+concept has_mpi_counts_mutable = requires(T& t) {
+    { mpi::experimental::counts(t) } -> std::ranges::contiguous_range;
+    requires std::same_as<int, std::remove_cvref_t<std::ranges::range_value_t<decltype(mpi::experimental::counts(t))>>>;
+    { std::ranges::data(mpi::experimental::counts(t)) } -> std::convertible_to<int*>;
 };
 
 template <typename T>
@@ -282,7 +295,7 @@ concept has_mpi_displs = requires(T const& t) {
 /// Does NOT require a scalar mpi::count() — variadic MPI operations use the
 /// per-rank counts array directly and never need the total element count.
 template <typename T>
-concept data_buffer_v = has_mpi_data<T> && has_mpi_type<T> && has_mpi_sizev<T> && has_mpi_displs<T>;
+concept data_buffer_v = has_mpi_data<T> && has_mpi_type<T> && has_mpi_counts<T> && has_mpi_displs<T>;
 
 template <typename T>
 concept send_buffer_v = data_buffer_v<T> && requires(T&& t) {

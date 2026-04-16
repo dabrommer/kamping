@@ -17,7 +17,7 @@ namespace kamping {
 namespace ranges {
 
 template <typename Base, mpi::experimental::count_range Displs, bool resize = false>
-    requires mpi::experimental::has_mpi_sizev<Base> && std::ranges::output_range<Displs, int>
+    requires mpi::experimental::has_mpi_counts<Base> && std::ranges::output_range<Displs, int>
              && (!resize || has_resize<Displs> || has_mpi_resize_for_receive<Displs>)
 class auto_displs_view : public kamping::ranges::view_interface<auto_displs_view<Base, Displs>> {
     Base           base_;
@@ -70,7 +70,7 @@ public:
 
     std::span<int const> mpi_displs() const {
         if (needs_to_compute_displs_) {
-            auto&& counts = mpi::experimental::sizev(base());
+            auto&& counts = mpi::experimental::counts(base());
             if constexpr (resize) {
                 if (std::ranges::size(displs_) < std::ranges::size(counts)) {
                     kamping::ranges::resize_for_receive(

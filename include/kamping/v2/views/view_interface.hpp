@@ -77,48 +77,22 @@ struct view_interface : public view_interface_base, public std::ranges::view_int
         return mpi::experimental::data(derived().base());
     }
 
-    constexpr auto mpi_sizev() const
-        requires mpi::experimental::has_mpi_sizev<decltype(derived().base())>
+    constexpr auto mpi_counts()
+        requires mpi::experimental::has_mpi_counts_mutable<decltype(derived().base())>
     {
-        return mpi::experimental::sizev(derived().base());
+        return mpi::experimental::counts(derived().base());
+    }
+
+    constexpr auto mpi_counts() const
+        requires mpi::experimental::has_mpi_counts<decltype(derived().base())>
+    {
+        return mpi::experimental::counts(derived().base());
     }
 
     constexpr auto mpi_displs() const
         requires mpi::experimental::has_mpi_displs<decltype(derived().base())>
     {
         return mpi::experimental::displs(derived().base());
-    }
-
-    decltype(auto) counts() const&
-        requires kamping::ranges::has_counts_accessor<decltype(derived().base())>
-    {
-        return derived().base().counts();
-    }
-    decltype(auto) counts() &
-        requires kamping::ranges::has_counts_accessor<decltype(derived().base())>
-    {
-        return derived().base().counts();
-    }
-    decltype(auto) counts() &&
-        requires kamping::ranges::has_counts_accessor<decltype(derived().base())>
-    {
-        return std::move(derived().base()).counts();
-    }
-
-    decltype(auto) displs() const&
-        requires kamping::ranges::has_displs_accessor<decltype(derived().base())>
-    {
-        return derived().base().displs();
-    }
-    decltype(auto) displs() &
-        requires kamping::ranges::has_displs_accessor<decltype(derived().base())>
-    {
-        return derived().base().displs();
-    }
-    decltype(auto) displs() &&
-        requires kamping::ranges::has_displs_accessor<decltype(derived().base())>
-    {
-        return std::move(derived().base()).displs();
     }
 
     void mpi_resize_for_receive(std::ptrdiff_t n)

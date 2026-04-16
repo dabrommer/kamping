@@ -28,7 +28,7 @@ namespace ranges {
 /// view_interface. Calling base() triggers ensure_flattened(), so the flat buffer
 /// is always fully populated before any accessor reads it.
 ///
-/// mpi_sizev() and mpi_displs() are provided explicitly and are also lazy
+/// mpi_counts() and mpi_displs() are provided explicitly and are also lazy
 /// (same ensure_flattened() guard).
 ///
 /// Template parameters:
@@ -122,7 +122,7 @@ public:
           counts_(kamping::ranges::all(std::forward<C>(counts))),
           displs_(kamping::ranges::all(std::forward<D>(displs))) {}
 
-    std::span<int const> mpi_sizev() const {
+    std::span<int const> mpi_counts() const {
         ensure_flattened();
         return {std::ranges::data(counts_), std::ranges::size(counts_)};
     }
