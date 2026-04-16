@@ -35,7 +35,7 @@ concept has_mpi_handle_ptr_member = requires(T& t) {
 // mpi_native_handle() / mpi_native_handle_ptr() member functions.
 //
 //   template <>
-//   struct mpi::experimental::native_handle_traits<MyComm> {
+//   struct native_handle_traits<MyComm> {
 //       static MPI_Comm handle(MyComm const& c)  { return c.get_comm(); }
 //       static MPI_Comm* handle_ptr(MyComm& c)   { return c.get_comm_ptr(); }
 //   };
@@ -104,12 +104,12 @@ constexpr T* handle_ptr(T* t) noexcept {
 
 template <typename T, typename HandleType>
 concept convertible_to_mpi_handle = builtin_handle<HandleType> && requires(T const& t) {
-    { mpi::experimental::handle(t) } -> std::same_as<HandleType>;
+    { handle(t) } -> std::same_as<HandleType>;
 };
 
 template <typename T, typename HandleType>
 concept convertible_to_mpi_handle_ptr = builtin_handle<HandleType> && requires(T& t) {
-    { mpi::experimental::handle_ptr(t) } -> std::same_as<HandleType*>;
+    { handle_ptr(t) } -> std::same_as<HandleType*>;
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -123,7 +123,7 @@ concept convertible_to_mpi_handle_ptr = builtin_handle<HandleType> && requires(T
 // To support a typed rank wrapper or a scoped enum with non-int underlying type:
 //
 //   template <>
-//   struct mpi::experimental::rank_traits<Rank> {
+//   struct rank_traits<Rank> {
 //       static int rank(Rank const& r) { return r.value; }
 //   };
 //
@@ -190,12 +190,12 @@ constexpr int to_tag(T t) {
 
 template <typename T>
 concept rank = requires(T const& t) {
-    { mpi::experimental::to_rank(t) } -> std::same_as<int>;
+    { to_rank(t) } -> std::same_as<int>;
 };
 
 template <typename T>
 concept tag = requires(T const& t) {
-    { mpi::experimental::to_tag(t) } -> std::same_as<int>;
+    { to_tag(t) } -> std::same_as<int>;
 };
 
 } // namespace mpi::experimental

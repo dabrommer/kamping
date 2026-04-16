@@ -48,8 +48,8 @@ public:
 
 /// @brief Non-owning view over an existing `MPI_Status`.
 ///
-/// Satisfies `mpi::experimental::convertible_to_mpi_handle_ptr<MPI_Status>` so it can be
-/// passed directly to `mpi::experimental::` operations that accept a status out-parameter.
+/// Satisfies `convertible_to_mpi_handle_ptr<MPI_Status>` so it can be
+/// passed directly to `` operations that accept a status out-parameter.
 class status_view : public status_accessors<status_view> {
 public:
     /// @brief Construct from a pointer to an existing MPI_Status. Must not be null.
@@ -60,12 +60,12 @@ public:
         return _status;
     }
 
-    /// @return The underlying `MPI_Status` by value (for `mpi::experimental::handle`).
+    /// @return The underlying `MPI_Status` by value (for `handle`).
     [[nodiscard]] MPI_Status mpi_handle() const {
         return *_status;
     }
 
-    /// @return Pointer to the underlying `MPI_Status` (for `mpi::experimental::handle_ptr`).
+    /// @return Pointer to the underlying `MPI_Status` (for `handle_ptr`).
     [[nodiscard]] MPI_Status* mpi_handle_ptr() {
         return _status;
     }
@@ -84,8 +84,8 @@ private:
 /// @brief Owning wrapper around `MPI_Status`.
 ///
 /// All fields are undefined until the object is passed to (or filled by) an MPI
-/// communication function. Satisfies both `mpi::experimental::convertible_to_mpi_handle<MPI_Status>`
-/// and `mpi::experimental::convertible_to_mpi_handle_ptr<MPI_Status>`.
+/// communication function. Satisfies both `convertible_to_mpi_handle<MPI_Status>`
+/// and `convertible_to_mpi_handle_ptr<MPI_Status>`.
 class status : public status_accessors<status> {
 public:
     /// @brief Default-construct. All fields are undefined until filled by MPI.
@@ -104,12 +104,12 @@ public:
         return _status;
     }
 
-    /// @return The underlying `MPI_Status` by value (for `mpi::experimental::handle`).
+    /// @return The underlying `MPI_Status` by value (for `handle`).
     [[nodiscard]] MPI_Status mpi_handle() const {
         return _status;
     }
 
-    /// @return Pointer to the underlying `MPI_Status` (for `mpi::experimental::handle_ptr`).
+    /// @return Pointer to the underlying `MPI_Status` (for `handle_ptr`).
     [[nodiscard]] MPI_Status* mpi_handle_ptr() {
         return &_status;
     }
