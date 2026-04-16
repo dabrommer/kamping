@@ -33,7 +33,7 @@ inline constexpr bottom_t bottom{};
 /// The receive buffer must be pre-sized; deferred resize is not supported for in-place operations.
 struct inplace_t {
     static void*          mpi_data() { return MPI_IN_PLACE; }
-    static std::ptrdiff_t mpi_size() { return 0; }
+    static std::ptrdiff_t mpi_count() { return 0; }
     static MPI_Datatype   mpi_type() { return MPI_DATATYPE_NULL; }
 };
 inline constexpr inplace_t inplace{};
@@ -45,7 +45,7 @@ inline constexpr inplace_t inplace{};
 ///   v2::gather(local_data, v2::null_buf, root, comm);  // non-root
 struct null_buf_t {
     static void*          mpi_data() { return nullptr; }
-    static std::ptrdiff_t mpi_size() { return 0; }
+    static std::ptrdiff_t mpi_count() { return 0; }
     static MPI_Datatype   mpi_type() { return MPI_DATATYPE_NULL; }
 };
 inline constexpr null_buf_t null_buf{};

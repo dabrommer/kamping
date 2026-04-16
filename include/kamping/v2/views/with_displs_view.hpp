@@ -15,7 +15,7 @@
 namespace kamping {
 namespace ranges {
 
-template <typename Base, count_range Displs, bool monotonic = false>
+  template <typename Base, mpi::experimental::count_range Displs, bool monotonic = false>
 class with_displs_view : public kamping::ranges::view_interface<with_displs_view<Base, Displs, monotonic>> {
     Base   base_;
     Displs displs_;

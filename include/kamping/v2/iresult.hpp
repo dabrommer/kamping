@@ -7,8 +7,8 @@
 
 #include <mpi.h>
 
-#include "kamping/v2/error_handling.hpp"
-#include "kamping/v2/native_handle.hpp"
+#include "mpi/error.hpp"
+#include "mpi/handle.hpp"
 #include "kamping/v2/views/all.hpp"
 #include "kamping/v2/ranges/concepts.hpp"
 #include "kamping/v2/result.hpp"
@@ -30,7 +30,7 @@ protected:
     void do_wait(MPI_Status* s) {
         int err = MPI_Wait(&request_, s);
         if (err != MPI_SUCCESS) {
-            throw core::mpi_error(err);
+            throw mpi::experimental::mpi_error(err);
         }
     }
 
@@ -39,7 +39,7 @@ protected:
         int flag;
         int err = MPI_Test(&request_, &flag, s);
         if (err != MPI_SUCCESS) {
-            throw core::mpi_error(err);
+            throw mpi::experimental::mpi_error(err);
         }
         return static_cast<bool>(flag);
     }
@@ -125,9 +125,9 @@ public:
     ///   owned  (owning_view<T>): moves value out — iresult is left in moved-from state.
     ///   borrowed (ref_view<T>):  returns lvalue reference to the external buffer.
     ///   view pass-through:       moves the view out.
-    template <bridge::convertible_to_mpi_handle_ptr<MPI_Status> Status = MPI_Status*>
+    template <mpi::experimental::convertible_to_mpi_handle_ptr<MPI_Status> Status = MPI_Status*>
     decltype(auto) wait(Status&& status = MPI_STATUS_IGNORE) {
-        do_wait(kamping::bridge::native_handle_ptr(status));
+        do_wait(mpi::experimental::handle_ptr(status));
         return extract_buf();
     }
 
@@ -136,9 +136,9 @@ public:
     ///   owned (owning_view<T> or non-borrowed view): returns optional<T> / optional<View>.
     ///     Some on completion — buffer moved out, iresult spent.
     ///     nullopt on pending — iresult remains valid for retry or wait().
-    template <bridge::convertible_to_mpi_handle_ptr<MPI_Status> Status = MPI_Status*>
+    template <mpi::experimental::convertible_to_mpi_handle_ptr<MPI_Status> Status = MPI_Status*>
     auto test(Status&& status = MPI_STATUS_IGNORE) {
-        bool const done = do_test(kamping::bridge::native_handle_ptr(status));
+        bool const done = do_test(mpi::experimental::handle_ptr(status));
         if constexpr (ranges::borrowed_buffer<view_t>) {
             return done;
         } else {
@@ -179,18 +179,18 @@ public:
 
     /// Blocks until complete, then returns the result.
     /// Owned members are moved out; borrowed members copy their reference binding (no data copy).
-    template <bridge::convertible_to_mpi_handle_ptr<MPI_Status> Status = MPI_Status*>
+    template <mpi::experimental::convertible_to_mpi_handle_ptr<MPI_Status> Status = MPI_Status*>
     result<SBuf, RBuf> wait(Status&& status = MPI_STATUS_IGNORE) {
-        do_wait(kamping::bridge::native_handle_ptr(status));
+        do_wait(mpi::experimental::handle_ptr(status));
         return std::move(*result_);
     }
 
     /// Non-blocking completion check. Always returns optional<result<SBuf, RBuf>>.
     ///   Some: operation complete — owned members moved out, ref bindings copied (no data copy).
     ///   nullopt: pending — iresult remains valid for retry or wait().
-    template <bridge::convertible_to_mpi_handle_ptr<MPI_Status> Status = MPI_Status*>
+    template <mpi::experimental::convertible_to_mpi_handle_ptr<MPI_Status> Status = MPI_Status*>
     std::optional<result<SBuf, RBuf>> test(Status&& status = MPI_STATUS_IGNORE) {
-        if (do_test(kamping::bridge::native_handle_ptr(status)))
+        if (do_test(mpi::experimental::handle_ptr(status)))
             return std::move(*result_);
         return std::nullopt;
     }

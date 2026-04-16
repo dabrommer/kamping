@@ -2,7 +2,7 @@
 
 ## Handle types
 
-- [x] **`kamping::v2::status`** / **`status_view`** — done (`status.hpp`)
+- [x] **`mpi::experimental::status`** / **`status_view`** — done (`include/mpi/status.hpp`); re-exported from `kamping::v2::` via `include/kamping/v2/status.hpp`
 - [ ] **`kamping::v2::comm`** / **`comm_view`** — owning/non-owning wrappers around `MPI_Comm`
   - CRTP mixin `comm_accessors` with `.rank()`, `.size()`, `.native()`
   - `comm_view`: non-owning (e.g. for `MPI_COMM_WORLD`); satisfies `bridge::convertible_to_mpi_handle<MPI_Comm>`
@@ -14,15 +14,15 @@
 
 ## P2P
 
-- [x] **`core::send`** / **`v2::send`** (all modes: standard, buffered, sync, ready)
-- [x] **`core::recv`** / **`v2::recv`**
-- [x] **`core::isend`** / **`v2::isend`**
-- [x] **`core::irecv`** / **`v2::irecv`**
-- [x] **`core::sendrecv`** / **`v2::sendrecv`**
-- [x] **`core::isendrecv`** / **`v2::isendrecv`**
-- [x] **`core::probe`** — bare `MPI_Probe` wrapper (core only)
-- [x] **`core::mprobe`** — bare `MPI_Mprobe` wrapper (core only)
-- [x] **`core::mrecv`** / **`core::imrecv`**
+- [x] **`mpi::experimental::send`** / **`v2::send`** (all modes: standard, buffered, sync, ready)
+- [x] **`mpi::experimental::recv`** / **`v2::recv`**
+- [x] **`mpi::experimental::isend`** / **`v2::isend`**
+- [x] **`mpi::experimental::irecv`** / **`v2::irecv`**
+- [x] **`mpi::experimental::sendrecv`** / **`v2::sendrecv`**
+- [x] **`mpi::experimental::isendrecv`** / **`v2::isendrecv`**
+- [x] **`mpi::experimental::probe`** — bare `MPI_Probe` wrapper (core only)
+- [x] **`mpi::experimental::mprobe`** — bare `MPI_Mprobe` wrapper (core only)
+- [x] **`mpi::experimental::mrecv`** / **`mpi::experimental::imrecv`**
 - [ ] **`probe_result` type** (`p2p/probe_result.hpp`)
   - Owns `MPI_Message` and `MPI_Status` from a matched probe
   - Accessors: `.source()`, `.tag()`, `.count<T>()`
@@ -48,34 +48,33 @@ who prefer not to use the view pipeline.
 
 **Core files move to `include/mpi/` now** (before the monorepo restructure). This establishes
 the physical boundary immediately and makes the later monorepo step a trivial `git mv` with no
-logic changes. The intermediate layout:
+logic changes. The intermediate layout (actual filenames differ slightly from the plan):
 
 ```
 include/
-  mpi/                         ← core layer (views-free, self-contained)
+  mpi/                         ← core layer (views-free, self-contained) ✓ DONE
     collectives/
-      allgather.hpp            (mpi::experimental:: namespace)
-      allgatherv.hpp
-      alltoall.hpp
-      alltoallv.hpp
-      bcast.hpp
-      barrier.hpp
+      allgather.hpp            (mpi::experimental:: namespace) ✓
+      allgatherv.hpp           ✓
+      alltoall.hpp             ✓
+      alltoallv.hpp            ✓
+      bcast.hpp                ✓
+      barrier.hpp              ✓
     p2p/
-      send.hpp
-      recv.hpp
-      isend.hpp
-      irecv.hpp
-      sendrecv.hpp
-      isendrecv.hpp
-      probe.hpp
-      mprobe.hpp
-      mrecv.hpp
-      imrecv.hpp
-    concepts.hpp               (buffer concepts, deferred protocol)
-    ranges.hpp                 (accessor dispatch, buffer_traits)
-    mpi_span.hpp               (mpi_span / mpi_span_v)
-    native_handle.hpp
-    error_handling.hpp
+      send.hpp                 ✓
+      recv.hpp                 ✓
+      isend.hpp                ✓
+      irecv.hpp                ✓
+      sendrecv.hpp             ✓
+      isendrecv.hpp            ✓
+      probe.hpp                ✓
+      mprobe.hpp               ✓
+      mrecv.hpp                ✓
+      imrecv.hpp               ✓
+    buffer.hpp                 (buffer concepts + accessor dispatch; was concepts.hpp+ranges.hpp) ✓
+    mpi_span.hpp               (mpi_span / mpi_span_v) ← TODO Step 2
+    handle.hpp                 (was native_handle.hpp) ✓
+    error.hpp                  (was error_handling.hpp) ✓
   kamping/v2/                  ← ergonomics layer; #includes from <mpi/...>
     collectives/               (kamping::v2:: only; one-liners calling infer + mpi::experimental::)
     p2p/
@@ -91,32 +90,28 @@ include/
 
 **Decision:** core layer moves to `mpi::experimental::`, ergonomics layer stays `kamping::v2::`.
 
-| Current | Final |
+| Was | Now (done) |
 |---|---|
-| `kamping::ranges::` (concepts, accessor dispatch) | `mpi::experimental::` |
-| `kamping::core::` (bare MPI wrappers) | `mpi::experimental::` |
-| `kamping::views::` (view adaptors) | `kamping::views::` |
-| `kamping::v2::` (high-level wrappers, infer) | `kamping::v2::` |
-
-The namespace rename is done as a **separate commit** from the file moves so each step can
-be built and tested independently.
+| `kamping::ranges::` (concepts, accessor dispatch) | `mpi::experimental::` ✓ |
+| `kamping::core::` (bare MPI wrappers) | `mpi::experimental::` ✓ |
+| `kamping::views::` (view adaptors) | `kamping::views::` ✓ |
+| `kamping::v2::` (high-level wrappers, infer) | `kamping::v2::` ✓ |
 
 ### Step-by-step tasks
 
-**Step 1 — Move view infrastructure out of `ranges/` into `views/`** (by hand)
+**[x] Step 1 — Move view infrastructure out of `ranges/` into `views/`**
 
   | File | Action |
   |---|---|
-  | `ranges/view_interface.hpp` | `git mv` → `views/view_interface.hpp` |
-  | `ranges/all.hpp` | `git mv` → `views/all.hpp` |
-  | `ranges/adaptor.hpp` | `git mv` → `views/adaptor.hpp` |
-  | `ranges/concepts.hpp` | stays |
-  | `ranges/ranges.hpp` | stays |
+  | `ranges/view_interface.hpp` | `git mv` → `views/view_interface.hpp` ✓ |
+  | `ranges/all.hpp` | `git mv` → `views/all.hpp` ✓ |
+  | `ranges/adaptor.hpp` | `git mv` → `views/adaptor.hpp` ✓ |
+  | `ranges/concepts.hpp` | stays ✓ |
+  | `ranges/ranges.hpp` | stays ✓ |
 
-  Update all `#include` paths in `views/` files, `iresult.hpp`, `result.hpp`, and `views.hpp`.
-  After this step `ranges/` contains only headers that `core::` legitimately needs.
+  `ranges/` now contains only headers that the core layer legitimately needs.
 
-- [ ] **Step 2 — Add `mpi_span` / `mpi_span_v`** (`include/kamping/v2/ranges/mpi_span.hpp`) ← Claude writes this
+- [ ] **Step 2 — Add `mpi_span` / `mpi_span_v`** (`include/mpi/mpi_span.hpp`) ← TODO
 
   Concrete non-template structs satisfying the buffer concepts without any view machinery.
   `void*` covers both send (`void const*` is implicit) and recv:
@@ -128,7 +123,7 @@ be built and tested independently.
       MPI_Datatype   type;
 
       void*          mpi_data()  noexcept       { return data; }
-      std::ptrdiff_t mpi_size()  const noexcept { return size; }
+      std::ptrdiff_t mpi_count()  const noexcept { return size; }
       MPI_Datatype   mpi_type()  const noexcept { return type; }
   };
 
@@ -141,7 +136,7 @@ be built and tested independently.
 
       void*                mpi_data()   noexcept       { return data; }
       MPI_Datatype         mpi_type()   const noexcept { return type; }
-      std::ptrdiff_t       mpi_size()   const noexcept {
+      std::ptrdiff_t       mpi_count()   const noexcept {
           return std::accumulate(counts, counts + comm_size, std::ptrdiff_t{0});
       }
       std::span<int const> mpi_sizev()  const noexcept { return {counts, static_cast<std::size_t>(comm_size)}; }
@@ -152,36 +147,24 @@ be built and tested independently.
   - `mpi_span` satisfies `send_buffer` and `recv_buffer`
   - `mpi_span_v` satisfies `send_buffer_v` and `recv_buffer_v`
 
-**Step 3 — Split collectives + p2p files and move core halves to `include/mpi/`** (by hand)
+**[x] Step 3 — Split collectives + p2p files and move core halves to `include/mpi/`**
 
-  Each file currently contains both `kamping::core::` and `kamping::v2::` in the same `.hpp`.
-  Split each file:
-  - Core half → `include/mpi/collectives/<name>.hpp` (keep `kamping::core::` namespace for now)
-  - v2 half → stays in `include/kamping/v2/collectives/<name>.hpp`, `#include`s from `<mpi/collectives/<name>.hpp>`
+  Done. All collectives and p2p files are split; core halves live in `include/mpi/`.
+  Infrastructure files placed as follows (final names differ from plan):
+  - `ranges/concepts.hpp` + `ranges/ranges.hpp` → `include/mpi/buffer.hpp` (merged)
+  - `native_handle.hpp` → `include/mpi/handle.hpp`
+  - `error_handling.hpp` → `include/mpi/error.hpp`
+  - CMakeLists updated to add `include/mpi` to include path.
 
-  Same split for all `p2p/` files. Also move:
-  - `ranges/concepts.hpp` → `include/mpi/concepts.hpp`
-  - `ranges/ranges.hpp` → `include/mpi/ranges.hpp`
-  - `ranges/mpi_span.hpp` → `include/mpi/mpi_span.hpp`
-  - `native_handle.hpp` → `include/mpi/native_handle.hpp`
-  - `error_handling.hpp` → `include/mpi/error_handling.hpp`
+**[x] Step 4 — Namespace rename**
 
-  Update CMakeLists to add `include/mpi` to the include path. Build and test.
+  Done in the same pass as Step 3. All `include/mpi/` code is already in `mpi::experimental::`.
+  All `include/kamping/v2/` references updated accordingly.
 
-**Step 4 — Namespace rename** (separate commit, after step 3 builds cleanly)
+- [x] **Step 5 — Verify include discipline**
 
-  - `kamping::ranges::` → `mpi::experimental::` throughout `include/mpi/`
-  - `kamping::core::` → `mpi::experimental::` throughout `include/mpi/`
-  - Update all references in `include/kamping/v2/` that call into the core layer
-  - Build and test again
-
-- [ ] **Step 5 — Verify include discipline**
-
-  No file under `include/mpi/` should include anything from `include/kamping/v2/views/`:
-  ```bash
-  grep -r "kamping/v2/views\|kamping/v2/infer\|kamping/v2/result" include/mpi/
-  ```
-  Should return nothing.
+  Verified: no file under `include/mpi/` includes anything from `include/kamping/v2/views/`,
+  `infer.hpp`, or result headers.
 
 ## Monorepo restructure
 
@@ -229,20 +212,20 @@ each collective's implementation.
 
 ### `builtin_mpi_handle` — add `MPI_Op`
 
-- [ ] Add `MPI_Op` to the `builtin_mpi_handle` concept in `native_handle.hpp` so that raw
-  `MPI_Op` values pass through `bridge::native_handle` unchanged, consistent with `MPI_Comm`,
+- [ ] Add `MPI_Op` to the `builtin_mpi_handle` concept in `handle.hpp` so that raw
+  `MPI_Op` values pass through `mpi::experimental::handle` unchanged, consistent with `MPI_Comm`,
   `MPI_Datatype`, etc.
 
 ### `native_handle_traits` for kamping-types op/type wrappers
 
-- [ ] Specialize `bridge::native_handle_traits` for `kamping::types::ScopedOp`,
+- [ ] Specialize `mpi::experimental::handle_traits` for `kamping::types::ScopedOp`,
   `kamping::types::ScopedFunctorOp`, and `kamping::types::ScopedCallbackOp` so they satisfy
-  `convertible_to_mpi_handle<MPI_Op>` and can be passed directly to `core::` collectives.
-- [ ] Specialize `bridge::native_handle_traits` for `kamping::types::ScopedDatatype` so it
+  `convertible_to_mpi_handle<MPI_Op>` and can be passed directly to `mpi::experimental::` collectives.
+- [ ] Specialize `mpi::experimental::handle_traits` for `kamping::types::ScopedDatatype` so it
   satisfies `convertible_to_mpi_handle<MPI_Datatype>` — the only kamping-types datatype wrapper
   that needs to reach the core layer (committed derived types; complex type pools belong in v2).
 
-### `kamping::core::op_traits<Op, SBuf>` — buffer-aware customization point
+### `mpi::experimental::op_traits<Op, SBuf>` — buffer-aware customization point
 
 `kamping-types` keeps `mpi_operation_traits<Op, T>` element-type-centric (standalone module,
 no buffer concept dependency). The core layer owns a separate buffer-aware trait:
@@ -265,8 +248,8 @@ struct op_traits<Op, SBuf> {
 };
 ```
 
-Users can specialize `kamping::core::op_traits<Op, SBuf>` non-intrusively for custom buffer+op
-combinations, parallel to `kamping::ranges::buffer_traits<T>` for buffer types.
+Users can specialize `mpi::experimental::op_traits<Op, SBuf>` non-intrusively for custom buffer+op
+combinations, parallel to `mpi::experimental::buffer_traits<T>` for buffer types.
 
 ### `mpi_op_for<Op, SBuf>` concept
 
@@ -281,16 +264,16 @@ specialization accesses `range_value_t<SBuf>`, which is only valid for range typ
 For raw-pointer / `mpi_span` buffers only `convertible_to_mpi_handle<MPI_Op>` applies —
 builtin functor inference requires a typed range.
 
-### `kamping::core::native_op<SBuf>(op)` — free function customization point
+### `mpi::experimental::native_op<SBuf>(op)` — free function customization point
 
-Analogous to `kamping::core::type(buf)` / `kamping::ranges::size(buf)`:
+Analogous to `mpi::experimental::type(buf)` / `mpi::experimental::count(buf)`:
 
 ```cpp
 template <data_buffer SBuf, typename Op>
     requires mpi_op_for<Op, SBuf>
 MPI_Op native_op(Op const& op) {
-    if constexpr (bridge::convertible_to_mpi_handle<Op, MPI_Op>)
-        return bridge::native_handle(op);
+    if constexpr (mpi::experimental::convertible_to_handle<Op, MPI_Op>)
+        return mpi::experimental::handle(op);
     else
         return op_traits<Op, SBuf>::op();
 }
@@ -306,8 +289,8 @@ template <send_buffer SBuf, recv_buffer RBuf, typename Op>
     requires mpi_op_for<Op, SBuf>
 void reduce(SBuf&& sbuf, RBuf&& rbuf, Op&& op, int root, MPI_Comm comm) {
     MPI_Reduce(
-        ranges::data(sbuf), ranges::data(rbuf), ranges::size(sbuf),
-        ranges::type(sbuf), native_op<SBuf>(op), root, comm
+        mpi::experimental::data(sbuf), mpi::experimental::data(rbuf), mpi::experimental::count(sbuf),
+        mpi::experimental::type(sbuf), native_op<SBuf>(op), root, comm
     );
 }
 ```
@@ -353,12 +336,12 @@ Three zero-overhead sentinel buffer types. All implemented.
 
 ## Collectives
 
-- [x] **`core::barrier`** / **`v2::barrier`**
-- [x] **`core::bcast`** / **`v2::bcast`**
-- [x] **`core::allgather`** / **`v2::allgather`**
-- [x] **`core::allgatherv`** / **`v2::allgatherv`**
-- [x] **`core::alltoall`** / **`v2::alltoall`**
-- [x] **`core::alltoallv`** / **`v2::alltoallv`**
+- [x] **`mpi::experimental::barrier`** / **`v2::barrier`**
+- [x] **`mpi::experimental::bcast`** / **`v2::bcast`**
+- [x] **`mpi::experimental::allgather`** / **`v2::allgather`**
+- [x] **`mpi::experimental::allgatherv`** / **`v2::allgatherv`**
+- [x] **`mpi::experimental::alltoall`** / **`v2::alltoall`**
+- [x] **`mpi::experimental::alltoallv`** / **`v2::alltoallv`**
 - [ ] **Blocking**: `allreduce`, `scatter`, `scatterv`, `gather`, `gatherv`, `reduce`, `scan`, `exscan`
 - [ ] **Non-blocking**: `iallreduce`, `iallgather`, `iallgatherv`, `ialltoall`, `ialltoallv`, `iscatter`, `iscatterv`, `igather`, `igatherv`, `ireduce`, `iscan`, `iexscan`, `ibarrier`
 - Follow the same layering as p2p: `core::` wraps MPI directly, `v2::` handles inference and result types

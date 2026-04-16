@@ -6,18 +6,18 @@
 #include <vector>
 
 #include "kamping/kassert/kassert.hpp"
-#include "kamping/v2/views/adaptor.hpp"
-#include "kamping/v2/views/all.hpp"
 #include "kamping/v2/ranges/concepts.hpp"
 #include "kamping/v2/ranges/ranges.hpp"
-#include "kamping/v2/views/view_interface.hpp"
 #include "kamping/v2/tags.hpp"
+#include "kamping/v2/views/adaptor.hpp"
+#include "kamping/v2/views/all.hpp"
+#include "kamping/v2/views/view_interface.hpp"
 
 namespace kamping {
 namespace ranges {
 
-template <typename Base, count_range Displs, bool resize = false>
-    requires has_mpi_sizev<Base> && std::ranges::output_range<Displs, int>
+template <typename Base, mpi::experimental::count_range Displs, bool resize = false>
+    requires mpi::experimental::has_mpi_sizev<Base> && std::ranges::output_range<Displs, int>
              && (!resize || has_resize<Displs> || has_mpi_resize_for_receive<Displs>)
 class auto_displs_view : public kamping::ranges::view_interface<auto_displs_view<Base, Displs>> {
     Base           base_;
@@ -42,16 +42,24 @@ public:
         : base_(kamping::ranges::all(std::forward<R>(base))),
           displs_(kamping::ranges::all(std::forward<C>(displs))) {}
 
-    constexpr Displs const& displs() const& { return displs_; }
-    constexpr Displs&       displs() &      { return displs_; }
-    constexpr Displs&&      displs() &&     { return std::move(displs_); }
+    constexpr Displs const& displs() const& {
+        return displs_;
+    }
+    constexpr Displs& displs() & {
+        return displs_;
+    }
+    constexpr Displs&& displs() && {
+        return std::move(displs_);
+    }
 
     constexpr std::pair<Base, Displs> extract() && {
         return {std::move(base_), std::move(displs_)};
     }
 
     /// Displacements are always computed via exclusive_scan — monotonically non-decreasing.
-    constexpr bool displs_monotonic() const { return true; }
+    constexpr bool displs_monotonic() const {
+        return true;
+    }
 
     /// Invalidates the cached displacements so they will be recomputed on the
     /// next mpi_displs() call. Called automatically when commit_counts() propagates
@@ -62,11 +70,12 @@ public:
 
     std::span<int const> mpi_displs() const {
         if (needs_to_compute_displs_) {
-            auto&& counts = kamping::ranges::sizev(base());
+            auto&& counts = mpi::experimental::sizev(base());
             if constexpr (resize) {
                 if (std::ranges::size(displs_) < std::ranges::size(counts)) {
                     kamping::ranges::resize_for_receive(
-                        displs_, static_cast<std::ptrdiff_t>(std::ranges::size(counts))
+                        displs_,
+                        static_cast<std::ptrdiff_t>(std::ranges::size(counts))
                     );
                 }
             }
@@ -97,27 +106,27 @@ namespace views {
 template <typename Container = std::vector<int>>
 constexpr auto auto_displs() {
     return kamping::ranges::adaptor<1, decltype([](auto&& r, auto&& displs) {
-        return kamping::ranges::auto_displs_view(
-            kamping::v2::resize,
-            std::forward<decltype(r)>(r),
-            std::forward<decltype(displs)>(displs)
-        );
-    })>{}(Container{});
+                                        return kamping::ranges::auto_displs_view(
+                                            kamping::v2::resize,
+                                            std::forward<decltype(r)>(r),
+                                            std::forward<decltype(displs)>(displs)
+                                        );
+                                    })>{}(Container{});
 }
 
 // (container) partial or (r, container) full — no resize.
 template <typename... Args>
-    requires(sizeof...(Args) >= 1
-             && !std::same_as<
-                 std::remove_cvref_t<std::tuple_element_t<0, std::tuple<Args...>>>,
-                 kamping::v2::resize_t>)
+    requires(
+        sizeof...(Args) >= 1
+        && !std::same_as<std::remove_cvref_t<std::tuple_element_t<0, std::tuple<Args...>>>, kamping::v2::resize_t>
+    )
 constexpr auto auto_displs(Args&&... args) {
     return kamping::ranges::adaptor<1, decltype([](auto&& r, auto&& displs) {
-        return kamping::ranges::auto_displs_view(
-            std::forward<decltype(r)>(r),
-            std::forward<decltype(displs)>(displs)
-        );
-    })>{}(std::forward<Args>(args)...);
+                                        return kamping::ranges::auto_displs_view(
+                                            std::forward<decltype(r)>(r),
+                                            std::forward<decltype(displs)>(displs)
+                                        );
+                                    })>{}(std::forward<Args>(args)...);
 }
 
 // (resize, container) partial or (resize, r, container) full — with resize.
@@ -125,12 +134,12 @@ template <typename... Args>
     requires(sizeof...(Args) >= 1)
 constexpr auto auto_displs(kamping::v2::resize_t, Args&&... args) {
     return kamping::ranges::adaptor<1, decltype([](auto&& r, auto&& displs) {
-        return kamping::ranges::auto_displs_view(
-            kamping::v2::resize,
-            std::forward<decltype(r)>(r),
-            std::forward<decltype(displs)>(displs)
-        );
-    })>{}(std::forward<Args>(args)...);
+                                        return kamping::ranges::auto_displs_view(
+                                            kamping::v2::resize,
+                                            std::forward<decltype(r)>(r),
+                                            std::forward<decltype(displs)>(displs)
+                                        );
+                                    })>{}(std::forward<Args>(args)...);
 }
 
 } // namespace views

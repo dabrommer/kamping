@@ -9,7 +9,7 @@
 #include "kamping/communicator.hpp"
 #include "kamping/environment.hpp"
 #include "kamping/v2/contrib/cereal_view.hpp"
-#include "kamping/v2/native_handle.hpp"
+#include "mpi/handle.hpp"
 #include "kamping/v2/p2p/irecv.hpp"
 #include "kamping/v2/p2p/isend.hpp"
 #include "kamping/v2/p2p/isendrecv.hpp"
@@ -19,7 +19,7 @@
 #include "kamping/v2/views/resize_view.hpp"
 
 template <>
-struct kamping::bridge::native_handle_traits<kamping::Communicator<>> {
+struct mpi::experimental::handle_traits<kamping::Communicator<>> {
     static MPI_Comm handle(kamping::Communicator<> const& comm) {
         return comm.mpi_communicator();
     }
@@ -30,8 +30,8 @@ struct my_struct {
 };
 
 template <>
-struct kamping::ranges::buffer_traits<my_struct> {
-    static std::ptrdiff_t size(my_struct const&) {
+struct mpi::experimental::buffer_traits<my_struct> {
+    static std::ptrdiff_t count(my_struct const&) {
         return 1;
     }
     static int const* data(my_struct const& t) {
@@ -50,7 +50,7 @@ int main(int, char*[]) {
     kamping::Communicator<> comm;
     MPI_Comm_set_errhandler(MPI_COMM_WORLD, MPI_ERRORS_RETURN);
 
-    kamping::core::send(my_struct{}, MPI_PROC_NULL, 0, MPI_COMM_WORLD);
+    mpi::experimental::send(my_struct{}, MPI_PROC_NULL, 0, MPI_COMM_WORLD);
     if (comm.rank() == 0) {
         std::vector<int> v{1, 2, 3, 4};
         kamping::v2::send(std::move(v), 1, comm);

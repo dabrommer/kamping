@@ -2,67 +2,23 @@
 
 #include <mpi.h>
 
-#include "kamping/v2/error_handling.hpp"
 #include "kamping/v2/infer.hpp"
-#include "kamping/v2/native_handle.hpp"
 #include "kamping/v2/p2p/constants.hpp"
-#include "kamping/v2/ranges/concepts.hpp"
-#include "kamping/v2/ranges/ranges.hpp"
 #include "kamping/v2/result.hpp"
-
-namespace kamping::core {
-
-template <
-    ranges::send_buffer                               SBuf,
-    ranges::recv_buffer                               RBuf,
-    bridge::mpi_rank                                  Dest    = int,
-    bridge::mpi_rank                                  Source  = int,
-    bridge::mpi_tag                                   SendTag = int,
-    bridge::mpi_tag                                   RecvTag = int,
-    bridge::convertible_to_mpi_handle<MPI_Comm>       Comm    = MPI_Comm,
-    bridge::convertible_to_mpi_handle_ptr<MPI_Status> Status  = MPI_Status*>
-void sendrecv(
-    SBuf&&      sbuf,
-    Dest        dest,
-    SendTag     send_tag,
-    RBuf&&      rbuf,
-    Source      source,
-    RecvTag     recv_tag,
-    Comm const& comm,
-    Status&&    status
-) {
-    int err = MPI_Sendrecv(
-        kamping::ranges::data(sbuf),
-        static_cast<int>(kamping::ranges::size(sbuf)),
-        kamping::ranges::type(sbuf),
-        kamping::bridge::to_rank(dest),
-        kamping::bridge::to_tag(send_tag),
-        kamping::ranges::data(rbuf),
-        static_cast<int>(kamping::ranges::size(rbuf)),
-        kamping::ranges::type(rbuf),
-        kamping::bridge::to_rank(source),
-        kamping::bridge::to_tag(recv_tag),
-        kamping::bridge::native_handle(comm),
-        kamping::bridge::native_handle_ptr(status)
-    );
-    if (err != MPI_SUCCESS) {
-        throw mpi_error(err);
-    }
-}
-
-} // namespace kamping::core
+#include "mpi/handle.hpp"
+#include "mpi/p2p/sendrecv.hpp"
 
 namespace kamping::v2 {
 
 template <
-    ranges::send_buffer                               SBuf,
-    ranges::recv_buffer                               RBuf,
-    bridge::mpi_rank                                  Dest    = int,
-    bridge::mpi_rank                                  Source  = int,
-    bridge::mpi_tag                                   SendTag = int,
-    bridge::mpi_tag                                   RecvTag = int,
-    bridge::convertible_to_mpi_handle<MPI_Comm>       Comm    = MPI_Comm,
-    bridge::convertible_to_mpi_handle_ptr<MPI_Status> Status  = MPI_Status*>
+    mpi::experimental::send_buffer                               SBuf,
+    mpi::experimental::recv_buffer                               RBuf,
+    mpi::experimental::rank                                      Dest    = int,
+    mpi::experimental::rank                                      Source  = int,
+    mpi::experimental::tag                                       SendTag = int,
+    mpi::experimental::tag                                       RecvTag = int,
+    mpi::experimental::convertible_to_mpi_handle<MPI_Comm>       Comm    = MPI_Comm,
+    mpi::experimental::convertible_to_mpi_handle_ptr<MPI_Status> Status  = MPI_Status*>
 auto sendrecv(
     SBuf&&      sbuf,
     Dest        dest,
@@ -78,13 +34,13 @@ auto sendrecv(
         comm_op::sendrecv{},
         res.send,
         res.recv,
-        kamping::bridge::to_rank(dest),
-        kamping::bridge::to_tag(send_tag),
-        kamping::bridge::to_rank(source),
-        kamping::bridge::to_tag(recv_tag),
-        kamping::bridge::native_handle(comm)
+        mpi::experimental::to_rank(dest),
+        mpi::experimental::to_tag(send_tag),
+        mpi::experimental::to_rank(source),
+        mpi::experimental::to_tag(recv_tag),
+        mpi::experimental::handle(comm)
     );
-    core::sendrecv(
+    mpi::experimental::sendrecv(
         res.send,
         std::move(dest),
         std::move(send_tag),
@@ -98,12 +54,12 @@ auto sendrecv(
 }
 
 template <
-    ranges::send_buffer                               SBuf,
-    ranges::recv_buffer                               RBuf,
-    bridge::mpi_rank                                  Dest   = int,
-    bridge::mpi_rank                                  Source = int,
-    bridge::convertible_to_mpi_handle<MPI_Comm>       Comm   = MPI_Comm,
-    bridge::convertible_to_mpi_handle_ptr<MPI_Status> Status = MPI_Status*>
+    mpi::experimental::send_buffer                               SBuf,
+    mpi::experimental::recv_buffer                               RBuf,
+    mpi::experimental::rank                                      Dest   = int,
+    mpi::experimental::rank                                      Source = int,
+    mpi::experimental::convertible_to_mpi_handle<MPI_Comm>       Comm   = MPI_Comm,
+    mpi::experimental::convertible_to_mpi_handle_ptr<MPI_Status> Status = MPI_Status*>
 auto sendrecv(
     SBuf&&      sbuf,
     Dest        dest,

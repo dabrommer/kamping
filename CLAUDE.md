@@ -150,7 +150,7 @@ v2 is organized into four explicit layers. Each layer depends only on the layers
 - View adaptor machinery: `view_interface_base`, `adaptor_closure`, `adaptor`, `composed_closure` — the pipe `|` operator infrastructure.
 - Core view adaptors that carry metadata through a pipe without adding ownership or resize logic: `with_type`, `with_size`, `with_counts`, `with_displs`.
 - `kamping::core::` MPI wrappers — one MPI call each, no inference, no resizing, throw `mpi_error` on failure.
-- `kamping::bridge::native_handle` / `to_rank` / `to_tag` — extract raw MPI handles from any wrapper.
+- `mpi::experimental::native_handle` / `to_rank` / `to_tag` — extract raw MPI handles from any wrapper.
 
 **Language bindings (kamping-v2)** — C++ ergonomics and MPI convenience on top of the bridge:
 - `infer()` protocol: operation-tagged ADL hook that resolves unknown recv sizes (via `MPI_Mprobe`) or variadic counts before the MPI call is issued.
@@ -183,7 +183,7 @@ kamping::v2::send(map | kamping::views::serialize, 1, comm);   // Cereal seriali
 | `kamping::v2::` | High-level wrappers: call `infer()` then delegate to `core::` |
 | `kamping::ranges::` | Buffer concepts, trait dispatch (`size`, `data`, `type`, `sizev`, `displs`) |
 | `kamping::views::` | Range adaptor factory functions (pipe operators) |
-| `kamping::bridge::` | Native-handle adaption for communicators, ranks, tags |
+| `mpi::experimental::` | Native-handle adaption for communicators, ranks, tags |
 
 ### Buffer Concepts (`include/kamping/v2/ranges/concepts.hpp`)
 
@@ -246,7 +246,7 @@ Non-blocking operations return `iresult<Buf>` (single buffer) or `iresult<SBuf, 
 
 ### Native Handle Bridge (`include/kamping/v2/native_handle.hpp`)
 
-Free functions `kamping::bridge::native_handle(x)` and `native_handle_ptr(x)` extract `MPI_Comm`, `MPI_Request`, etc. from arbitrary wrapper types. Dispatch priority:
+Free functions `mpi::experimental::native_handle(x)` and `native_handle_ptr(x)` extract `MPI_Comm`, `MPI_Request`, etc. from arbitrary wrapper types. Dispatch priority:
 
 1. `native_handle_traits<T>` specialization
 2. `t.mpi_native_handle()` / `t.mpi_native_handle_ptr()` member functions

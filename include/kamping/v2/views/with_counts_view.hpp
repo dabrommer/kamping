@@ -3,16 +3,16 @@
 #include <span>
 #include <utility>
 
-#include "kamping/v2/views/adaptor.hpp"
-#include "kamping/v2/views/all.hpp"
 #include "kamping/v2/ranges/concepts.hpp"
 #include "kamping/v2/ranges/ranges.hpp"
+#include "kamping/v2/views/adaptor.hpp"
+#include "kamping/v2/views/all.hpp"
 #include "kamping/v2/views/view_interface.hpp"
 
 namespace kamping {
 namespace ranges {
 
-template <typename Base, count_range Counts>
+template <typename Base, mpi::experimental::count_range Counts>
 class with_counts_view : public kamping::ranges::view_interface<with_counts_view<Base, Counts>> {
     Base   base_;
     Counts counts_;
@@ -30,9 +30,15 @@ public:
         : base_(kamping::ranges::all(std::forward<R>(base))),
           counts_(kamping::ranges::all(std::forward<C>(counts))) {}
 
-    constexpr Counts const& counts() const& { return counts_; }
-    constexpr Counts&       counts() &      { return counts_; }
-    constexpr Counts&&      counts() &&     { return std::move(counts_); }
+    constexpr Counts const& counts() const& {
+        return counts_;
+    }
+    constexpr Counts& counts() & {
+        return counts_;
+    }
+    constexpr Counts&& counts() && {
+        return std::move(counts_);
+    }
 
     constexpr std::pair<Base, Counts> extract() && {
         return {std::move(base_), std::move(counts_)};

@@ -17,7 +17,7 @@ namespace kamping::ranges {
 /// T is the wrapped type: a (possibly const) lvalue reference for non-owning views, or
 /// a value type for owning views. Use `obj | kamping::views::serialize` to construct.
 ///
-/// Send path: mpi_size()/mpi_data() lazily serialize the wrapped object into buffer_ on first
+/// Send path: mpi_count()/mpi_data() lazily serialize the wrapped object into buffer_ on first
 ///            access; the ostringstream result is moved (no copy) into buffer_.
 /// Recv path: set_recv_count(n) sizes buffer_ for MPI to write into directly; operator*
 ///            triggers lazy deserialization via a zero-copy membuf streambuf, then
@@ -113,7 +113,7 @@ public:
 
     // ---- MPI protocol methods --------------------------------------------
 
-    std::ptrdiff_t mpi_size() const {
+    std::ptrdiff_t mpi_count() const {
         if (needs_deserialization_) return recv_count_;
         if (!serialized_) do_serialize();
         return static_cast<std::ptrdiff_t>(buffer_.size());

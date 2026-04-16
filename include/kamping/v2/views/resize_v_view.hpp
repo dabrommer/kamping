@@ -3,10 +3,10 @@
 #include <algorithm>
 #include <ranges>
 
-#include "kamping/v2/views/adaptor.hpp"
-#include "kamping/v2/views/all.hpp"
 #include "kamping/v2/ranges/concepts.hpp"
 #include "kamping/v2/ranges/ranges.hpp"
+#include "kamping/v2/views/adaptor.hpp"
+#include "kamping/v2/views/all.hpp"
 #include "kamping/v2/views/view_interface.hpp"
 
 namespace kamping::ranges {
@@ -26,7 +26,7 @@ namespace kamping::ranges {
 ///   recv_buf | with_counts(auto_counts()) | auto_displs(resize, displs) | resize_v
 ///   recv_buf | with_counts(auto_counts()) | with_displs(user_displs)         | resize_v
 template <typename Base>
-    requires has_mpi_sizev<Base> && has_mpi_displs<Base>
+    requires mpi::experimental::has_mpi_sizev<Base> && mpi::experimental::has_mpi_displs<Base>
 class resize_v_view : public view_interface<resize_v_view<Base>> {
     Base base_;
 
@@ -34,18 +34,22 @@ public:
     template <typename R>
     explicit resize_v_view(R&& base) : base_(kamping::ranges::all(std::forward<R>(base))) {}
 
-    constexpr Base&       base() &      noexcept { return base_; }
-    constexpr Base const& base() const& noexcept { return base_; }
+    constexpr Base& base() & noexcept {
+        return base_;
+    }
+    constexpr Base const& base() const& noexcept {
+        return base_;
+    }
 
-    // mpi_sizev, mpi_displs, mpi_type, mpi_size are all forwarded through view_interface.
+    // mpi_sizev, mpi_displs, mpi_type, mpi_count are all forwarded through view_interface.
 
     auto mpi_data() {
-        auto const& counts     = kamping::ranges::sizev(base_);
-        auto const& displs     = kamping::ranges::displs(base_);
-        auto const* counts_ptr = std::ranges::data(counts);
-        auto const* displs_ptr = std::ranges::data(displs);
-        auto const  n          = std::ranges::size(counts);
-        std::ptrdiff_t total   = 0;
+        auto const&    counts     = mpi::experimental::sizev(base_);
+        auto const&    displs     = mpi::experimental::displs(base_);
+        auto const*    counts_ptr = std::ranges::data(counts);
+        auto const*    displs_ptr = std::ranges::data(displs);
+        auto const     n          = std::ranges::size(counts);
+        std::ptrdiff_t total      = 0;
         // Fast path: monotonically increasing displs (e.g. exclusive_scan or user-declared).
         // Tight O(1) bound: last_displ + last_count.
         // General path: non-monotonic displs require max(displs[i] + counts[i]) over all i.
@@ -64,7 +68,7 @@ public:
             }
         }
         kamping::ranges::resize_for_receive(base_, total);
-        return kamping::ranges::data(base_);
+        return mpi::experimental::data(base_);
     }
 };
 

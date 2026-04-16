@@ -6,59 +6,9 @@
 
 #include <mpi.h>
 
-#include "ranges.hpp"
+#include <mpi/buffer.hpp>
 
 namespace kamping::ranges {
-
-template <typename T>
-concept has_mpi_size = requires(T const& t) {
-    { kamping::ranges::size(t) } -> integer_like;
-};
-
-template <typename T>
-concept has_mpi_data = requires(T&& t) {
-    { kamping::ranges::data(t) } -> ptr_to_object;
-};
-
-template <typename T>
-concept has_mpi_type = requires(T const& t) {
-    { kamping::ranges::type(t) } -> std::convertible_to<MPI_Datatype>;
-};
-
-template <typename T>
-concept data_buffer = has_mpi_size<T> && has_mpi_data<T> && has_mpi_type<T>;
-
-template <typename T>
-concept send_buffer = data_buffer<T> && requires(T&& t) {
-    { kamping::ranges::data(t) } -> std::convertible_to<void const*>;
-};
-
-template <typename T>
-concept recv_buffer = data_buffer<T> && requires(T&& t) {
-    { kamping::ranges::data(t) } -> std::convertible_to<void*>;
-};
-
-template <typename T>
-concept send_recv_buffer = recv_buffer<T>;
-
-template <typename T>
-concept has_mpi_sizev = requires(T const& t) {
-    { kamping::ranges::sizev(t) } -> count_range;
-};
-
-template <typename T>
-concept has_mpi_displs = requires(T const& t) {
-    { kamping::ranges::displs(t) } -> count_range;
-};
-
-template <typename T>
-concept data_buffer_v = data_buffer<T> && has_mpi_sizev<T> && has_mpi_displs<T>;
-
-template <typename T>
-concept send_buffer_v = send_buffer<T> && data_buffer_v<T>;
-
-template <typename T>
-concept recv_buffer_v = recv_buffer<T> && data_buffer_v<T>;
 
 template <typename T>
 concept has_counts_accessor = requires(T& t) { t.counts(); };

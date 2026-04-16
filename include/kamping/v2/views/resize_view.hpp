@@ -10,7 +10,7 @@
 namespace kamping::ranges {
 
 /// Wraps a resizable container and defers the actual resize until mpi_data() is first accessed.
-/// set_recv_count(n) is called by the collective after inferring n via infer(). mpi_size()
+/// set_recv_count(n) is called by the collective after inferring n via infer(). mpi_count()
 /// returns the stored count immediately; mpi_data() triggers the resize on first call.
 /// mpi_type() is forwarded from the base via view_interface.
 template <typename Base>
@@ -32,8 +32,8 @@ public:
         needs_resize_ = true;
     }
 
-    /// Returns the recv count set by set_recv_count(). Overrides view_interface::mpi_size().
-    std::ptrdiff_t mpi_size() const {
+    /// Returns the recv count set by set_recv_count(). Overrides view_interface::mpi_count().
+    std::ptrdiff_t mpi_count() const {
         return recv_count_;
     }
 
@@ -44,7 +44,7 @@ public:
             kamping::ranges::resize_for_receive(base_, recv_count_);
             needs_resize_ = false;
         }
-        return kamping::ranges::data(base_);
+        return mpi::experimental::data(base_);
     }
 };
 

@@ -5,7 +5,7 @@
 #include <mpi.h>
 
 #include "kamping/v2/comm_op.hpp"
-#include "kamping/v2/native_handle.hpp"
+#include "mpi/handle.hpp"
 #include "kamping/v2/ranges/concepts.hpp"
 #include "kamping/v2/ranges/ranges.hpp"
 #include "kamping/v2/status.hpp"
@@ -23,22 +23,22 @@ namespace kamping {
 
 // ---- Default infer() overloads ----------------------------------------------
 
-template <kamping::ranges::recv_buffer RBuf>
+template <mpi::experimental::recv_buffer RBuf>
 auto infer(comm_op::recv, RBuf& rbuf, int source, int tag, MPI_Comm comm) {
     if constexpr (kamping::ranges::deferred_recv_buf<RBuf>) {
         v2::status  status;
         MPI_Message message = MPI_MESSAGE_NULL;
-        MPI_Mprobe(source, tag, comm, &message, bridge::native_handle_ptr(status));
-        rbuf.set_recv_count(static_cast<std::ptrdiff_t>(status.count(kamping::ranges::type(rbuf))));
+        MPI_Mprobe(source, tag, comm, &message, mpi::experimental::handle_ptr(status));
+        rbuf.set_recv_count(static_cast<std::ptrdiff_t>(status.count(mpi::experimental::type(rbuf))));
         return message;
     }
 }
-template <kamping::ranges::send_recv_buffer SRBuf>
+template <mpi::experimental::send_recv_buffer SRBuf>
 auto infer(comm_op::bcast, SRBuf& srbuf, int root, MPI_Comm comm) {
     if constexpr (kamping::ranges::deferred_recv_buf<SRBuf>) {
         int rank = 0;
         MPI_Comm_rank(comm, &rank);
-        auto size_on_root = rank == root ? kamping::ranges::size(srbuf) : 0;
+        auto size_on_root = rank == root ? mpi::experimental::count(srbuf) : 0;
         auto size_view    = std::views::single(size_on_root);
         MPI_Bcast(&size_on_root, 1, MPI_INT, root, comm);
         if (rank != root) {
@@ -47,45 +47,45 @@ auto infer(comm_op::bcast, SRBuf& srbuf, int root, MPI_Comm comm) {
     }
 }
 
-template <kamping::ranges::send_buffer SBuf, kamping::ranges::recv_buffer RBuf>
+template <mpi::experimental::send_buffer SBuf, mpi::experimental::recv_buffer RBuf>
 void infer(comm_op::allgather, SBuf const& sbuf, RBuf& rbuf, MPI_Comm comm) {
     if constexpr (kamping::ranges::deferred_recv_buf<RBuf>) {
         int comm_size = 0;
         MPI_Comm_size(comm, &comm_size);
-        rbuf.set_recv_count(comm_size * static_cast<std::ptrdiff_t>(kamping::ranges::size(sbuf)));
+        rbuf.set_recv_count(comm_size * static_cast<std::ptrdiff_t>(mpi::experimental::count(sbuf)));
     }
 }
 
-template <kamping::ranges::send_buffer SBuf, kamping::ranges::recv_buffer_v RBuf>
+template <mpi::experimental::send_buffer SBuf, mpi::experimental::recv_buffer_v RBuf>
 void infer(comm_op::allgatherv, SBuf const& sbuf, RBuf& rbuf, MPI_Comm comm) {
     if constexpr (kamping::ranges::deferred_recv_buf_v<RBuf>) {
         int comm_size = 0;
         MPI_Comm_size(comm, &comm_size);
         rbuf.set_comm_size(comm_size);
-        int send_count = static_cast<int>(kamping::ranges::size(sbuf));
-        MPI_Allgather(&send_count, 1, MPI_INT, kamping::ranges::data(rbuf.counts()), 1, MPI_INT, comm);
+        int send_count = static_cast<int>(mpi::experimental::count(sbuf));
+        MPI_Allgather(&send_count, 1, MPI_INT, mpi::experimental::data(rbuf.counts()), 1, MPI_INT, comm);
         rbuf.commit_counts();
     }
 }
 
-template <kamping::ranges::send_buffer SBuf, kamping::ranges::recv_buffer RBuf>
+template <mpi::experimental::send_buffer SBuf, mpi::experimental::recv_buffer RBuf>
 void infer(comm_op::alltoall, SBuf const& sbuf, RBuf& rbuf, MPI_Comm /* comm */) {
     if constexpr (kamping::ranges::deferred_recv_buf<RBuf>) {
-        rbuf.set_recv_count(static_cast<std::ptrdiff_t>(kamping::ranges::size(sbuf)));
+        rbuf.set_recv_count(static_cast<std::ptrdiff_t>(mpi::experimental::count(sbuf)));
     }
 }
 
-template <kamping::ranges::send_buffer_v SBuf, kamping::ranges::recv_buffer_v RBuf>
+template <mpi::experimental::send_buffer_v SBuf, mpi::experimental::recv_buffer_v RBuf>
 void infer(comm_op::alltoallv, SBuf const& sbuf, RBuf& rbuf, MPI_Comm comm) {
     if constexpr (kamping::ranges::deferred_recv_buf_v<RBuf>) {
         int comm_size = 0;
         MPI_Comm_size(comm, &comm_size);
         rbuf.set_comm_size(comm_size);
         MPI_Alltoall(
-            std::ranges::data(kamping::ranges::sizev(sbuf)),
+            std::ranges::data(mpi::experimental::sizev(sbuf)),
             1,
             MPI_INT,
-            kamping::ranges::data(rbuf.counts()),
+            mpi::experimental::data(rbuf.counts()),
             1,
             MPI_INT,
             comm
@@ -94,12 +94,12 @@ void infer(comm_op::alltoallv, SBuf const& sbuf, RBuf& rbuf, MPI_Comm comm) {
     }
 }
 
-template <kamping::ranges::send_buffer SBuf, kamping::ranges::recv_buffer RBuf>
+template <mpi::experimental::send_buffer SBuf, mpi::experimental::recv_buffer RBuf>
 void infer(
     comm_op::sendrecv, SBuf const& sbuf, RBuf& rbuf, int dest, int send_tag, int source, int recv_tag, MPI_Comm comm
 ) {
     if constexpr (kamping::ranges::deferred_recv_buf<RBuf>) {
-        int const send_count = static_cast<int>(kamping::ranges::size(sbuf));
+        int const send_count = static_cast<int>(mpi::experimental::count(sbuf));
         int       recv_count = 0;
         MPI_Sendrecv(
             &send_count,

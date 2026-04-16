@@ -27,7 +27,7 @@ public:
     with_size_view(R&& base, std::ptrdiff_t size)
         : base_(kamping::ranges::all(std::forward<R>(base))), size_(size) {}
 
-    constexpr std::ptrdiff_t mpi_size() const {
+    constexpr std::ptrdiff_t mpi_count() const {
         return size_;
     }
 };

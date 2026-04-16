@@ -13,7 +13,7 @@ namespace kamping::ranges {
 /// capturing by lvalue reference instead of by value.
 ///
 /// Satisfies contiguous_range and sized_range (size is always 1). MPI buffer
-/// protocol (mpi_data, mpi_size, mpi_type) is handled automatically by the
+/// protocol (mpi_data, mpi_count, mpi_type) is handled automatically by the
 /// CPO dispatch in ranges.hpp for contiguous ranges of builtin MPI types.
 ///
 /// Typical usage:

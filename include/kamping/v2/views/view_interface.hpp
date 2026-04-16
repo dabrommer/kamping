@@ -54,39 +54,39 @@ struct view_interface : public view_interface_base, public std::ranges::view_int
 
     template <typename _Derived = Derived>
     auto mpi_type() const
-        requires kamping::ranges::has_mpi_type<decltype(derived().base())>
+        requires mpi::experimental::has_mpi_type<decltype(derived().base())>
     {
-        return kamping::ranges::type(derived().base());
+        return mpi::experimental::type(derived().base());
     }
 
-    constexpr auto mpi_size() const
-        requires kamping::ranges::has_mpi_size<decltype(derived().base())>
+    constexpr auto mpi_count() const
+        requires mpi::experimental::has_mpi_count<decltype(derived().base())>
     {
-        return kamping::ranges::size(derived().base());
+        return mpi::experimental::count(derived().base());
     }
 
     constexpr auto mpi_data()
-        requires kamping::ranges::has_mpi_data<decltype(derived().base())>
+        requires mpi::experimental::has_mpi_data<decltype(derived().base())>
     {
-        return kamping::ranges::data(derived().base());
+        return mpi::experimental::data(derived().base());
     }
 
     constexpr auto mpi_data() const
-        requires kamping::ranges::has_mpi_data<decltype(derived().base())>
+        requires mpi::experimental::has_mpi_data<decltype(derived().base())>
     {
-        return kamping::ranges::data(derived().base());
+        return mpi::experimental::data(derived().base());
     }
 
     constexpr auto mpi_sizev() const
-        requires kamping::ranges::has_mpi_sizev<decltype(derived().base())>
+        requires mpi::experimental::has_mpi_sizev<decltype(derived().base())>
     {
-        return kamping::ranges::sizev(derived().base());
+        return mpi::experimental::sizev(derived().base());
     }
 
     constexpr auto mpi_displs() const
-        requires kamping::ranges::has_mpi_displs<decltype(derived().base())>
+        requires mpi::experimental::has_mpi_displs<decltype(derived().base())>
     {
-        return kamping::ranges::displs(derived().base());
+        return mpi::experimental::displs(derived().base());
     }
 
     decltype(auto) counts() const&
@@ -122,8 +122,10 @@ struct view_interface : public view_interface_base, public std::ranges::view_int
     }
 
     void mpi_resize_for_receive(std::ptrdiff_t n)
-        requires(kamping::ranges::has_mpi_resize_for_receive<decltype(derived().base())>
-                 || kamping::ranges::has_resize<decltype(derived().base())>)
+        requires(
+            kamping::ranges::has_mpi_resize_for_receive<decltype(derived().base())>
+            || kamping::ranges::has_resize<decltype(derived().base())>
+        )
     {
         kamping::ranges::resize_for_receive(derived().base(), n);
     }
