@@ -33,236 +33,192 @@
   - `improbe(source, tag, comm)` → `std::optional<probe_result>`
   - Update `infer(comm_op::recv, ...)` to use `probe_result` instead of raw `MPI_Message`
 
-## Clean layer split (namespace + file hierarchy)
+## Clean layer split + file restructuring
 
-The four-layer architecture described in CLAUDE.md is not yet reflected in the file layout or namespaces. Currently both bridge-layer and language-bindings-layer code live under `include/kamping/v2/ranges/` and `include/kamping/v2/views/` without a clear boundary.
+**Decision: views-free core.** The `core::` layer contains only the buffer contract (concepts,
+accessor dispatch, `mpi_span`/`mpi_span_v`) and the bare MPI wrappers. All view machinery
+(`view_interface`, `ref_view`, `owning_view`, `all()`, adaptor infrastructure, `with_*` views)
+belongs exclusively to the language-bindings layer and must not appear in any header that
+`core::` functions need to include.
 
-### Goal
+The `core::` function signatures do **not** change — they remain concept-constrained templates
+accepting anything satisfying `send_buffer` / `recv_buffer` / `send_buffer_v` / `recv_buffer_v`.
+`mpi_span` and `mpi_span_v` are concrete minimal implementations of those concepts for callers
+who prefer not to use the view pipeline.
 
-Enforce the split so that headers in the bridge layer never include language-bindings headers, and the layer each file belongs to is obvious from its path.
-
-Proposed layout sketch:
-```
-include/kamping/v2/
-  bridge/
-    concepts.hpp        ← ranges/concepts.hpp (buffer concepts, no deferred)
-    ranges.hpp          ← ranges/ranges.hpp (accessor dispatch)
-    adaptor.hpp         ← ranges/adaptor.hpp (pipe machinery)
-    view_interface.hpp  ← core half of view_interface (see below)
-    all.hpp             ← ref_view / owning_view / all() (see below)
-    views/              ← with_type, with_size, with_counts, with_displs (core views)
-  ...                   ← language-bindings layer (infer, resize_view, auto_counts, …)
-```
-
-### `view_interface` split
-
-`ranges/view_interface.hpp` currently forwards **all** protocol methods — both the core
-buffer metadata (`mpi_type`, `mpi_size`, `mpi_data`, `mpi_sizev`, `mpi_displs`, `counts`, `displs`)
-and the deferred-buffer protocol (`mpi_resize_for_receive`, `commit_counts`, `set_comm_size`,
-`displs_monotonic`). The deferred protocol belongs to the language-bindings layer.
-
-Proposed split:
-- **`view_interface_core`** (bridge layer) — forwards only metadata accessors; no deferred methods.
-  Core views (`with_counts_view`, `with_displs_view`, `with_type_view`, `with_size_view`) inherit
-  from this.
-- **`view_interface`** (language-bindings layer, extends `view_interface_core`) — adds the deferred
-  forwarding methods. Language-binding views (`resize_view`, `auto_counts_view`,
-  `auto_displs_view`, `resize_v_view`, `flatten_v_view`) inherit from this.
-
-### `ref_view` / `owning_view` placement
-
-Both layers need `ref_view`/`owning_view`:
-- Bridge-layer core views use them (via `all()`) to wrap the base range when building a view chain.
-- Language-bindings views also use them — and crucially, when the wrapped type `T` has the
-  deferred protocol, the wrapping `ref_view`/`owning_view` must forward it (so that, e.g.,
-  an `owning_view<resize_view<…>>` stored in `iresult` still exposes `mpi_resize_for_receive`).
-
-#### Why option (a) / two tiers doesn't work
-
-The deferred protocol must propagate through the *entire* view chain to reach the underlying
-container. Consider `vec | with_type(t) | resize`:
+**Core files move to `include/mpi/` now** (before the monorepo restructure). This establishes
+the physical boundary immediately and makes the later monorepo step a trivial `git mv` with no
+logic changes. The intermediate layout:
 
 ```
-resize_view
-  └─ with_type_view<ref_view<vec>>   ← resize_view calls resize_for_receive(base_, n) here
-       └─ ref_view<vec>
-            └─ vec
+include/
+  mpi/                         ← core layer (views-free, self-contained)
+    collectives/
+      allgather.hpp            (mpi::experimental:: namespace)
+      allgatherv.hpp
+      alltoall.hpp
+      alltoallv.hpp
+      bcast.hpp
+      barrier.hpp
+    p2p/
+      send.hpp
+      recv.hpp
+      isend.hpp
+      irecv.hpp
+      sendrecv.hpp
+      isendrecv.hpp
+      probe.hpp
+      mprobe.hpp
+      mrecv.hpp
+      imrecv.hpp
+    concepts.hpp               (buffer concepts, deferred protocol)
+    ranges.hpp                 (accessor dispatch, buffer_traits)
+    mpi_span.hpp               (mpi_span / mpi_span_v)
+    native_handle.hpp
+    error_handling.hpp
+  kamping/v2/                  ← ergonomics layer; #includes from <mpi/...>
+    collectives/               (kamping::v2:: only; one-liners calling infer + mpi::experimental::)
+    p2p/
+    views/
+    infer.hpp
+    result.hpp
+    iresult.hpp
+    ...
+  kamping/                     ← v1 untouched
 ```
-
-`resize_view::mpi_data()` calls `kamping::ranges::resize_for_receive(base_, n)` which dispatches
-to `base_.mpi_resize_for_receive(n)` or `base_.resize(n)`. If `with_type_view` uses
-`view_interface_core` (no deferred forwarding), it exposes neither — the chain is broken and
-the code fails to compile. The same failure applies to `commit_counts`/`set_comm_size` propagating
-through `with_counts_view` or `with_displs_view`. Any core view in the middle of a mixed chain
-becomes an opaque barrier.
-
-Option (a) is only viable if core views are always outermost (applied *after* all deferred views),
-which is the reverse of natural composition order and cannot be enforced at compile time.
-
-#### Preferred approach: template view-interface parameter
-
-Make each core view accept a template-template parameter for its view interface base, defaulting
-to `core::view_interface`. The v2 layer then instantiates the same view implementation with
-`v2::view_interface`, which adds the deferred forwarding. No logic is duplicated; `v2::with_type_view`
-is a type alias:
-
-```cpp
-// core layer
-template <typename Base, template <typename> class VI = core::view_interface>
-class with_type_view : public VI<with_type_view<Base, VI>> { ... };
-
-// v2 layer — alias, no new logic
-template <typename Base>
-using with_type_view = core::with_type_view<Base, v2::view_interface>;
-```
-
-The same parameter must be applied to `ref_view`, `owning_view`, and `all()`, since views
-wrap their base via `all()` internally:
-
-```cpp
-template <typename T, template <typename> class VI = core::view_interface>
-class ref_view : public VI<ref_view<T, VI>> { ... };
-
-// all() parameterized — v2 views call v2::all() internally
-template <template <typename> class VI = core::view_interface, typename R>
-constexpr auto all(R&& r) { ... }
-```
-
-With this design, `vec | v2::with_type(t) | resize` produces:
-
-```
-resize_view< v2::with_type_view< v2::ref_view<vec> > >
-```
-
-`v2::with_type_view` has `mpi_resize_for_receive` (via `v2::view_interface`) → forwarded from
-`v2::ref_view` → forwarded from `vec.resize()` ✓.
-
-Meanwhile `core::with_type_view` (used by `core::send`/`core::recv`) uses `core::view_interface`
-and compiles without any v2 headers, making core truly standalone.
-
-**Important footgun**: every view that wraps a base via `all()` internally must call the
-appropriately parameterized `all()`. A v2 view that accidentally calls `core::all()` will wrap
-in a `core::ref_view` and silently block deferred protocol propagation. This needs to be
-enforced by convention or by having v2 views unconditionally call `v2::all()`.
-
-**Prerequisite**: the deferred-protocol concepts (`has_commit_counts`, `has_set_comm_size`,
-`has_mpi_resize_for_receive`, `has_monotonic_displs`) currently live in `ranges/concepts.hpp`
-alongside the core buffer concepts. They must be moved to a separate header (e.g.
-`bridge/deferred_concepts.hpp`) so that `core::view_interface` does not need to include them
-and the core layer remains self-contained.
-
-#### Alternative: single view_interface, include-discipline only (option 3)
-
-Keep the current single `view_interface` with all forwarding. No include-level layering
-violation today because the deferred concepts are already in `ranges/concepts.hpp` (bridge
-layer) — `view_interface.hpp` has no upward dependency. The layer split is enforced purely
-by convention: core views never include v2-only headers.
-
-This is simpler and avoids the template-template parameter complexity and the `all()` footgun.
-The cost: if core is ever extracted as a standalone library, `core::view_interface` will carry
-forwarding methods for protocol methods it has no business knowing about.
-
-**Decision**: use the template view-interface parameter approach if standalone core is a
-real goal; use option 3 if the split remains a soft architectural principle within one repo.
-
-#### Alternative: views-free core
-
-A more radical alternative that sidesteps the entire view_interface split problem: **remove
-all views from the core layer entirely**. Core should be a language-specific implementation
-of the contract, not a C++ ergonomics layer. Pipe syntax and CRTP view machinery are ergonomic
-choices that belong in v2.
-
-**What stays in core:**
-- `ranges/concepts.hpp` — buffer concepts (`data_buffer`, `send_buffer`, `recv_buffer`, `data_buffer_v`)
-- `ranges/ranges.hpp` — accessor dispatch (`size/data/type/sizev/displs`), `buffer_traits`,
-  contiguous-range → `MPI_Datatype` deduction
-- `native_handle.hpp` — MPI handle extraction
-- `core::send`, `core::recv`, etc. — bare MPI wrappers, one call each
-- Two plain helper structs for cases where the caller needs to attach metadata that their
-  type cannot express via `buffer_traits` (see below)
-
-**What moves entirely to v2:**
-- `view_interface`, `ref_view`, `owning_view`, `all()` — no longer needed by core
-- Pipe adaptor machinery (`adaptor`, `adaptor_closure`, `composed_closure`)
-- All `with_*` views (`with_type_view`, `with_counts_view`, `with_displs_view`, `with_size_view`)
-- Everything already in v2 (`resize_view`, `auto_counts_view`, etc.)
-
-**Core helper structs** — fully concrete, non-template, no CRTP, no pipe:
-
-```cpp
-// Non-owning buffer with explicit MPI type.
-// void* covers both send (implicitly converts to void const*) and recv.
-// Mirrors std::span extended with an MPI type; name follows MPI's own type-erased style.
-struct mpi_span {
-    void*          data;
-    std::ptrdiff_t size;      // element count
-    MPI_Datatype   type;
-};
-
-// Variadic buffer: data + per-rank counts and displacements.
-// Name follows MPI's 'v'-suffix convention (allgatherv, alltoallv, …).
-// MPI mandates int for counts/displs, so no template parameter needed.
-struct mpi_span_v {
-    void*          data;
-    MPI_Datatype   type;
-    int const*     counts;    // per-rank element counts
-    int const*     displs;    // per-rank displacements
-    int            comm_size;
-};
-```
-
-Both satisfy their respective buffer concepts via member functions; no view machinery needed.
-
-**The `with_size` / prefix-send use case:**
-Use `std::span` / `std::views::take` to trim the range before passing to core, or construct
-an `mpi_span` directly. There is no `views::with_size` in core.
-
-**Benefits:**
-- Core is genuinely standalone: no view headers, no CRTP, no pipe machinery. Usable by
-  anyone comfortable with C++ ranges and MPI without learning the view adaptor system.
-- The template-VI parameter problem and the `all()` footgun disappear entirely.
-- `buffer_traits` remains the extension point for custom types in core.
-- v2 views are free to use whatever view_interface design they want without any core coupling.
-- **Reference implementation potential**: a views-free core, with simple concrete helper types
-  and a clean buffer concept hierarchy, is legible to MPI implementors and WG members who are
-  not C++ template experts. The paper aims to propose core as a candidate reference C++ MPI
-  interface; that case is strongest when core does not depend on any particular ergonomics
-  layer. Design decisions in core should be held to this standard: would an MPI WG find this
-  adoptable as a language-bridge specification?
-
-**Trade-offs:**
-- `core::send(vec | with_type(MPI_BYTE), ...)` becomes
-  `core::send(mpi_span{vec.data(), vec.size(), MPI_BYTE}, ...)`, or simply
-  `core::send(vec, ...)` when the MPI type is deducible. Less composable at the core level,
-  but that is intentional: composition is v2's job.
-- `mpi_span_v` requires the caller to already hold counts and displs as flat `int` arrays,
-  which is typical at the core level.
 
 ### Namespace alignment
 
-Currently everything is under `kamping::ranges::` and `kamping::views::` regardless of layer.
-Consider:
-- `kamping::bridge::ranges::` / `kamping::bridge::views::` for the bridge layer
-- `kamping::v2::views::` for the language-bindings layer (already partly true for `v2::` wrappers)
-Or keep the flat namespaces and rely on file paths alone for layer documentation.
+**Decision:** core layer moves to `mpi::experimental::`, ergonomics layer stays `kamping::v2::`.
 
-#### Re-evaluate `kamping::ranges::` as a namespace
+| Current | Final |
+|---|---|
+| `kamping::ranges::` (concepts, accessor dispatch) | `mpi::experimental::` |
+| `kamping::core::` (bare MPI wrappers) | `mpi::experimental::` |
+| `kamping::views::` (view adaptors) | `kamping::views::` |
+| `kamping::v2::` (high-level wrappers, infer) | `kamping::v2::` |
 
-`kamping::ranges::` was chosen to mirror `std::ranges::`, but a data buffer is not a range —
-it is a distinct abstraction (flat memory region + MPI type, not an iterator pair). Using the
-`ranges` namespace sub-communicates the wrong mental model to readers and to MPI WG reviewers.
+The namespace rename is done as a **separate commit** from the file moves so each step can
+be built and tested independently.
 
-If namespaces are made to reflect layers rather than mirror the std library, natural candidates
-are:
-- `kamping::core::` — for the buffer concepts, accessor dispatch, and helper structs (aligns
-  with the existing `kamping::core::send` etc.)
-- `kamping::v2::` — for the ergonomics layer (already used for wrappers)
-- Drop `kamping::ranges::` and `kamping::views::` entirely once the layer split is done
+### Step-by-step tasks
 
-The accessor free functions (`size`, `data`, `type`, …) and `buffer_traits` would then live
-in `kamping::core::`, making it clear they are part of the core contract rather than range
-adaptors. This also avoids the oddity of `kamping::ranges::size` shadowing `std::ranges::size`
-in translation units that use both.
+**Step 1 — Move view infrastructure out of `ranges/` into `views/`** (by hand)
+
+  | File | Action |
+  |---|---|
+  | `ranges/view_interface.hpp` | `git mv` → `views/view_interface.hpp` |
+  | `ranges/all.hpp` | `git mv` → `views/all.hpp` |
+  | `ranges/adaptor.hpp` | `git mv` → `views/adaptor.hpp` |
+  | `ranges/concepts.hpp` | stays |
+  | `ranges/ranges.hpp` | stays |
+
+  Update all `#include` paths in `views/` files, `iresult.hpp`, `result.hpp`, and `views.hpp`.
+  After this step `ranges/` contains only headers that `core::` legitimately needs.
+
+- [ ] **Step 2 — Add `mpi_span` / `mpi_span_v`** (`include/kamping/v2/ranges/mpi_span.hpp`) ← Claude writes this
+
+  Concrete non-template structs satisfying the buffer concepts without any view machinery.
+  `void*` covers both send (`void const*` is implicit) and recv:
+
+  ```cpp
+  struct mpi_span {
+      void*          data;
+      std::ptrdiff_t size;
+      MPI_Datatype   type;
+
+      void*          mpi_data()  noexcept       { return data; }
+      std::ptrdiff_t mpi_size()  const noexcept { return size; }
+      MPI_Datatype   mpi_type()  const noexcept { return type; }
+  };
+
+  struct mpi_span_v {
+      void*          data;
+      MPI_Datatype   type;
+      int const*     counts;      // per-rank element counts (length: comm_size)
+      int const*     displs;      // per-rank displacements  (length: comm_size)
+      int            comm_size;
+
+      void*                mpi_data()   noexcept       { return data; }
+      MPI_Datatype         mpi_type()   const noexcept { return type; }
+      std::ptrdiff_t       mpi_size()   const noexcept {
+          return std::accumulate(counts, counts + comm_size, std::ptrdiff_t{0});
+      }
+      std::span<int const> mpi_sizev()  const noexcept { return {counts, static_cast<std::size_t>(comm_size)}; }
+      std::span<int const> mpi_displs() const noexcept { return {displs, static_cast<std::size_t>(comm_size)}; }
+  };
+  ```
+
+  - `mpi_span` satisfies `send_buffer` and `recv_buffer`
+  - `mpi_span_v` satisfies `send_buffer_v` and `recv_buffer_v`
+
+**Step 3 — Split collectives + p2p files and move core halves to `include/mpi/`** (by hand)
+
+  Each file currently contains both `kamping::core::` and `kamping::v2::` in the same `.hpp`.
+  Split each file:
+  - Core half → `include/mpi/collectives/<name>.hpp` (keep `kamping::core::` namespace for now)
+  - v2 half → stays in `include/kamping/v2/collectives/<name>.hpp`, `#include`s from `<mpi/collectives/<name>.hpp>`
+
+  Same split for all `p2p/` files. Also move:
+  - `ranges/concepts.hpp` → `include/mpi/concepts.hpp`
+  - `ranges/ranges.hpp` → `include/mpi/ranges.hpp`
+  - `ranges/mpi_span.hpp` → `include/mpi/mpi_span.hpp`
+  - `native_handle.hpp` → `include/mpi/native_handle.hpp`
+  - `error_handling.hpp` → `include/mpi/error_handling.hpp`
+
+  Update CMakeLists to add `include/mpi` to the include path. Build and test.
+
+**Step 4 — Namespace rename** (separate commit, after step 3 builds cleanly)
+
+  - `kamping::ranges::` → `mpi::experimental::` throughout `include/mpi/`
+  - `kamping::core::` → `mpi::experimental::` throughout `include/mpi/`
+  - Update all references in `include/kamping/v2/` that call into the core layer
+  - Build and test again
+
+- [ ] **Step 5 — Verify include discipline**
+
+  No file under `include/mpi/` should include anything from `include/kamping/v2/views/`:
+  ```bash
+  grep -r "kamping/v2/views\|kamping/v2/infer\|kamping/v2/result" include/mpi/
+  ```
+  Should return nothing.
+
+## Monorepo restructure
+
+**Prerequisite: layer split + file restructuring must be complete** — `include/mpi/` must be
+self-contained and validated before this step.
+
+After step 5 above, the monorepo restructure is purely mechanical:
+
+Proposed top-level layout:
+
+```
+/
+  mpi-core/         include/mpi/ moves here — extractable via git subtree split
+  kamping-v2/       include/kamping/v2/ moves here
+  kamping-v1/       existing v1 code (while it lives); include/kamping/ paths unchanged
+  CMakeLists.txt    root; adds all subdirs, wires inter-component CMake targets
+```
+
+### Tasks
+
+- [ ] **Move files** using `git mv` to preserve history:
+  - `include/mpi/` → `mpi-core/include/mpi/`
+  - `include/kamping/v2/` → `kamping-v2/include/kamping/v2/`
+  - `include/kamping/` → `kamping-v1/include/kamping/` (if v1 survives)
+
+- [ ] **Per-component `CMakeLists.txt`** with explicit `target_link_libraries` edges
+  (`kamping-v2` → `mpi-core`, `mpi-core` → MPI + kamping-types).
+
+- [ ] **Root `CMakeLists.txt`** wires components together; shared CI and docs remain
+  at the repo root — single pipeline covers everything.
+
+- [ ] **Update FetchContent / find_package** docs. v1 users change only the `SOURCE_SUBDIR`
+  in FetchContent; their `#include <kamping/...>` paths are unaffected.
+
+Include paths and namespace are settled: headers under `include/mpi/` (no `experimental/`
+subdirectory), namespace `mpi::experimental::`. When standardized: one namespace rename,
+no file moves. kamping-v2 stays `kamping::v2::` throughout.
 
 ## Reduction operation handling
 
@@ -386,17 +342,14 @@ Three zero-overhead sentinel buffer types. All implemented.
 
 ## `recv_v<T>()` helper
 
-- [ ] **`v2::recv_v<T, Cont = std::vector>()`** — factory for the common variadic recv buffer idiom:
+- [x] **`v2::auto_recv_v<T, Cont = std::vector<T>>()`** / **`views::auto_recv_v`** — pipe adaptor and
+  owned factory for the common variadic recv buffer idiom. The adaptor composes
+  `auto_counts() | auto_displs() | resize_v`; the factory wraps an owned `Cont{}`:
 
   ```cpp
-  template <typename T, template <typename...> class Cont = std::vector>
-  auto recv_v() {
-      return Cont<T>{} | views::auto_counts() | views::auto_displs() | views::resize_v;
-  }
+  v2::allgatherv(local_data, v2::auto_recv_v<int>(), comm);
+  recv_buf | views::auto_recv_v   // lvalue borrow form
   ```
-
-  Usage: `v2::allgatherv(local_data, v2::recv_v<int>(), comm)`. Saves users from spelling
-  out the full pipe chain at every variadic collective call site.
 
 ## Collectives
 
@@ -404,7 +357,9 @@ Three zero-overhead sentinel buffer types. All implemented.
 - [x] **`core::bcast`** / **`v2::bcast`**
 - [x] **`core::allgather`** / **`v2::allgather`**
 - [x] **`core::allgatherv`** / **`v2::allgatherv`**
-- [ ] **Blocking**: `allreduce`, `alltoall`, `alltoallv`, `scatter`, `scatterv`, `gather`, `gatherv`, `reduce`, `scan`, `exscan`
+- [x] **`core::alltoall`** / **`v2::alltoall`**
+- [x] **`core::alltoallv`** / **`v2::alltoallv`**
+- [ ] **Blocking**: `allreduce`, `scatter`, `scatterv`, `gather`, `gatherv`, `reduce`, `scan`, `exscan`
 - [ ] **Non-blocking**: `iallreduce`, `iallgather`, `iallgatherv`, `ialltoall`, `ialltoallv`, `iscatter`, `iscatterv`, `igather`, `igatherv`, `ireduce`, `iscan`, `iexscan`, `ibarrier`
 - Follow the same layering as p2p: `core::` wraps MPI directly, `v2::` handles inference and result types
 
