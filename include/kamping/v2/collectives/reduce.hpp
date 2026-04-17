@@ -42,8 +42,9 @@ template <
     mpi::experimental::rank                                Root = int,
     mpi::experimental::convertible_to_mpi_handle<MPI_Comm> Comm = MPI_Comm>
 auto reduce(SBuf&& sbuf, Op const& op = std::plus<>{}, Root root = 0, Comm const& comm = MPI_COMM_WORLD)
-    -> result<SBuf, null_buf_t> {
-    return kamping::v2::reduce(std::forward<SBuf>(sbuf), null_buf_t{}, op, std::move(root), comm);
+    -> SBuf {
+    auto res = kamping::v2::reduce(std::forward<SBuf>(sbuf), null_buf_t{}, op, std::move(root), comm);
+    return std::move(res).send;
 }
 
 } // namespace kamping::v2
