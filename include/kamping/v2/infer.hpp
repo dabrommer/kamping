@@ -126,7 +126,17 @@ void infer(comm_op::reduce, SBuf const& sbuf, RBuf& rbuf, MPI_Op, int root, MPI_
         MPI_Comm_rank(comm, &rank);
         auto sbuf_ptr = mpi::experimental::ptr(sbuf);
         if (rank == root && sbuf_ptr != MPI_IN_PLACE) {
-            rbuf.set_recv_count(mpi::experimental::count(sbuf));
+            rbuf.set_recv_count(static_cast<std::ptrdiff_t>(mpi::experimental::count(sbuf)));
+        }
+    }
+}
+
+template <mpi::experimental::send_buffer SBuf, mpi::experimental::recv_buffer RBuf>
+void infer(comm_op::allreduce, SBuf const& sbuf, RBuf& rbuf, MPI_Op, MPI_Comm) {
+    if constexpr (kamping::ranges::deferred_recv_buf<RBuf>) {
+        auto sbuf_ptr = mpi::experimental::ptr(sbuf);
+        if (sbuf_ptr != MPI_IN_PLACE) {
+            rbuf.set_recv_count(static_cast<std::ptrdiff_t>(mpi::experimental::count(sbuf)));
         }
     }
 }

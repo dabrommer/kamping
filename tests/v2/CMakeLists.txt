@@ -21,6 +21,12 @@ kamping_register_mpi_test(
 )
 
 kamping_register_mpi_test(
+    test_v2_allreduce
+    FILES v2_allreduce_test.cpp
+    CORES 1 2 4
+)
+
+kamping_register_mpi_test(
     test_v2_reduce
     FILES v2_reduce_test.cpp
     CORES 1 2 4
