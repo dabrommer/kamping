@@ -116,34 +116,31 @@ include/
 
   ```cpp
   struct mpi_span {
-      void*          data;
+      void*          ptr;
       std::ptrdiff_t size;
       MPI_Datatype   type;
 
-      void*          mpi_data()  noexcept       { return data; }
+      void*          mpi_ptr()  noexcept       { return ptr; }
       std::ptrdiff_t mpi_count()  const noexcept { return size; }
       MPI_Datatype   mpi_type()  const noexcept { return type; }
   };
 
   struct mpi_span_v {
-      void*          data;
-      MPI_Datatype   type;
-      int const*     counts;      // per-rank element counts (length: comm_size)
-      int const*     displs;      // per-rank displacements  (length: comm_size)
-      int            comm_size;
+      void*        ptr;
+      MPI_Datatype type;
+      int const*   counts;      // per-rank element counts (length: comm_size)
+      int const*   displs;      // per-rank displacements  (length: comm_size)
+      int          comm_size;
 
-      void*                mpi_data()   noexcept       { return data; }
+      void*                mpi_ptr()   noexcept       { return ptr; }
       MPI_Datatype         mpi_type()   const noexcept { return type; }
-      std::ptrdiff_t       mpi_count()   const noexcept {
-          return std::accumulate(counts, counts + comm_size, std::ptrdiff_t{0});
-      }
-      std::span<int const> mpi_sizev()  const noexcept { return {counts, static_cast<std::size_t>(comm_size)}; }
+      std::span<int const> mpi_counts() const noexcept { return {counts, static_cast<std::size_t>(comm_size)}; }
       std::span<int const> mpi_displs() const noexcept { return {displs, static_cast<std::size_t>(comm_size)}; }
   };
   ```
 
   - `mpi_span` satisfies `send_buffer` and `recv_buffer`
-  - `mpi_span_v` satisfies `send_buffer_v` and `recv_buffer_v`
+  - `mpi_span_v` satisfies `send_buffer_v` and `recv_buffer_v` (no scalar `mpi_count()`)
 
 **[x] Step 3 — Split collectives + p2p files and move core halves to `include/mpi/`**
 

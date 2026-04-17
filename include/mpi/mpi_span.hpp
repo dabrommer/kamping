@@ -38,7 +38,7 @@ struct mpi_span_v {
     int const*   displs;    ///< Per-rank displacements  (length: comm_size).
     int          comm_size; ///< Number of ranks.
 
-    void*        mpi_ptr() noexcept       { return data; }
+    void*        mpi_ptr() noexcept       { return ptr; }
     MPI_Datatype mpi_type() const noexcept { return type; }
 
     std::span<int const> mpi_counts() const noexcept {

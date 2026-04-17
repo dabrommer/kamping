@@ -128,11 +128,10 @@ v2 is organized into four explicit layers. Each layer depends only on the layers
 ├─────────────────────────────────────────────────────────┤
 │  Language bridge                                         │
 │  Minimal C++ implementation of the buffer contract:      │
-│  ranges::size/data/type/sizev/displs dispatch,           │
+│  count/ptr/type/counts/displs dispatch,                  │
 │  core view adaptors (with_counts, with_displs, …),       │
-│  kamping::core:: MPI wrappers, native_handle bridge      │
-│  kamping/v2/ranges/,  kamping/v2/p2p/send.hpp (core::), │
-│  kamping/v2/native_handle.hpp                            │
+│  mpi::experimental:: MPI wrappers, native_handle bridge  │
+│  include/mpi/, kamping/v2/ranges/, kamping/v2/views/     │
 ├─────────────────────────────────────────────────────────┤
 │  Contract  (language-agnostic)                           │
 │  Abstract description of send/recv buffer,               │
@@ -144,12 +143,12 @@ v2 is organized into four explicit layers. Each layer depends only on the layers
 **Contract layer** — language-agnostic definitions of what a send buffer, recv buffer, variadic buffer (with counts and displacements), and a native MPI handle *are*. Expressed in C++ as the concepts in `kamping/v2/ranges/concepts.hpp` (`send_buffer`, `recv_buffer`, `data_buffer_v`, …) and as the `MPI_Comm`/`MPI_Request`/… handle family. No implementation here — only constraints.
 
 **Language bridge** — the minimal C++ wiring that makes the contract work for the language:
-- Accessor dispatch functions (`kamping::ranges::size/data/type/sizev/displs`) with three-tier priority: `buffer_traits<T>` specialization → member functions → `std::ranges` / builtin-type fallbacks.
-- `buffer_traits<T>` and `native_handle_traits<T>` — non-intrusive customization points for third-party types.
+- Accessor dispatch functions (`mpi::experimental::count/ptr/type/counts/displs`) with three-tier priority: `buffer_traits<T>` specialization → member functions (`mpi_count()`, `mpi_ptr()`, etc.) → `std::ranges` / builtin-type fallbacks.
+- `mpi::experimental::buffer_traits<T>` and `native_handle_traits<T>` — non-intrusive customization points for third-party types.
 - Ownership infrastructure: `ref_view<T>` (non-owning, wraps lvalue), `owning_view<T>` (owning, wraps rvalue), and `all(r)` / `all_t<R>` which select between them. This is foundational plumbing used by the adaptor machinery and by the bindings layer.
 - View adaptor machinery: `view_interface_base`, `adaptor_closure`, `adaptor`, `composed_closure` — the pipe `|` operator infrastructure.
 - Core view adaptors that carry metadata through a pipe without adding ownership or resize logic: `with_type`, `with_size`, `with_counts`, `with_displs`.
-- `kamping::core::` MPI wrappers — one MPI call each, no inference, no resizing, throw `mpi_error` on failure.
+- `mpi::experimental::` MPI wrappers — one MPI call each, no inference, no resizing, throw `mpi_error` on failure. Concrete buffer types `mpi_span` and `mpi_span_v` for calling without the view pipeline.
 - `mpi::experimental::native_handle` / `to_rank` / `to_tag` — extract raw MPI handles from any wrapper.
 
 **Language bindings (kamping-v2)** — C++ ergonomics and MPI convenience on top of the bridge:
@@ -157,7 +156,8 @@ v2 is organized into four explicit layers. Each layer depends only on the layers
 - Deferred buffer concepts (`deferred_recv_buf`, `deferred_recv_buf_v`) and the views that implement them: `resize`, `resize_v`, `auto_counts`. These exploit the bridge's `ref_view`/`owning_view` to hold buffers safely.
 - `auto_displs` — computes displacements via `exclusive_scan`; tags result as `has_monotonic_displs` to enable O(1) resize.
 - `iresult<Buf>` — move-only non-blocking handle; stores the buffer on the heap via `unique_ptr<all_t<Buf>>` so the pointer captured by MPI remains stable after a move.
-- `kamping::v2::` wrappers (send, recv, bcast, …) that call `infer()` then delegate to `core::`.
+- Sentinel buffers (`inplace`, `null_buf`, `bottom`) — zero-overhead special buffer values for collective shortcuts.
+- `kamping::v2::` wrappers (send, recv, bcast, …) that call `infer()` then delegate to `mpi::experimental::`.
 
 **Ecosystem bridges** — bindings to external C++ libraries, living in `kamping/v2/contrib/`. Currently: Cereal serialization via `views::serialize` / `views::deserialize<T>()`.
 
@@ -179,34 +179,32 @@ kamping::v2::send(map | kamping::views::serialize, 1, comm);   // Cereal seriali
 
 | Namespace | Role |
 |-----------|------|
-| `kamping::core::` | Thin bare-metal wrappers: one MPI call, no resize, no infer |
-| `kamping::v2::` | High-level wrappers: call `infer()` then delegate to `core::` |
-| `kamping::ranges::` | Buffer concepts, trait dispatch (`size`, `data`, `type`, `sizev`, `displs`) |
+| `mpi::experimental::` | Core layer: buffer concepts, accessors (`count`, `ptr`, `type`, `counts`, `displs`), MPI wrappers, native-handle adaption, concrete buffer types (`mpi_span`, `mpi_span_v`, `comm_view`) |
+| `kamping::v2::` | High-level wrappers: call `infer()` then delegate to `mpi::experimental::` |
 | `kamping::views::` | Range adaptor factory functions (pipe operators) |
-| `mpi::experimental::` | Native-handle adaption for communicators, ranks, tags |
 
-### Buffer Concepts (`include/kamping/v2/ranges/concepts.hpp`)
+### Buffer Concepts (`include/mpi/buffer.hpp`)
 
-A type satisfies a buffer concept when `kamping::ranges::size(t)`, `kamping::ranges::data(t)`, and `kamping::ranges::type(t)` return the right kinds of values:
+A type satisfies a buffer concept when `mpi::experimental::count(t)`, `mpi::experimental::ptr(t)`, and `mpi::experimental::type(t)` return the right kinds of values:
 
 | Concept | Requirements |
 |---------|-------------|
-| `data_buffer` | size + data (any pointer) + type |
-| `send_buffer` | data_buffer with `data()` convertible to `void const*` |
-| `recv_buffer` | data_buffer with `data()` convertible to `void*` |
-| `data_buffer_v` | data_buffer + `sizev()` (counts range) + `displs()` (displs range) |
+| `data_buffer` | count + ptr (any pointer) + type |
+| `send_buffer` | data_buffer with `ptr()` convertible to `void const*` |
+| `recv_buffer` | data_buffer with `ptr()` convertible to `void*` |
+| `data_buffer_v` | data_buffer + `counts()` (counts range) + `displs()` (displs range) |
 | `deferred_recv_buf` | recv_buffer with `set_recv_count(n)` for late-bound sizes |
-| `deferred_recv_buf_v` | variadic version with `set_comm_size`, `counts()`, `commit_counts()` |
+| `deferred_recv_buf_v` | variadic version with `set_comm_size`, `mpi_counts()`, `commit_counts()` |
 
-### Accessor Dispatch (`include/kamping/v2/ranges/ranges.hpp`)
+### Accessor Dispatch (`include/mpi/buffer.hpp`)
 
-Each of `size()`, `data()`, `type()`, `sizev()`, `displs()` is a free function with prioritized overload resolution:
+Each of `count()`, `ptr()`, `type()`, `counts()`, `displs()` is a free function in `mpi::experimental::` with prioritized overload resolution:
 
 1. `buffer_traits<T>` specialization — non-intrusive, for types you don't own
-2. `t.mpi_size()` / `t.mpi_data()` / `t.mpi_type()` member functions
-3. `std::ranges::size` / `std::ranges::data` + builtin MPI type deduction
+2. `t.mpi_count()` / `t.mpi_ptr()` / `t.mpi_type()` / `t.mpi_counts()` / `t.mpi_displs()` member functions
+3. `std::ranges::size` / `std::ranges::data` + builtin MPI type deduction (for non-variadic buffers)
 
-Specialize `kamping::ranges::buffer_traits<T>` to adapt any third-party type without modifying it.
+Specialize `mpi::experimental::buffer_traits<T>` to adapt any third-party type without modifying it.
 
 ### View Adaptors (`include/kamping/v2/views/`)
 
