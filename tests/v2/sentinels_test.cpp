@@ -1,6 +1,5 @@
 #include <gtest/gtest.h>
 
-#include "kamping/v2/ranges/concepts.hpp"
 #include "kamping/v2/tags.hpp"
 #include "kamping/v2/views/with_size_view.hpp"
 #include "kamping/v2/views/with_type_view.hpp"

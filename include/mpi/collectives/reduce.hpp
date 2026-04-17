@@ -56,8 +56,9 @@ void reduce(SBuf&& sbuf, RBuf&& rbuf, Op const& op, Root root, Comm const& comm 
         }
     } else {
         // Normal: count and type from sbuf
+        using scount_t = decltype(count(sbuf));
         KAMPING_ASSERT(
-            rank != root_rank || count(sbuf) == count(rbuf),
+            rank != root_rank || count(sbuf) == static_cast<scount_t>(count(rbuf)),
             "on root: send and receive buffers must have the same count"
         );
         KAMPING_ASSERT(
