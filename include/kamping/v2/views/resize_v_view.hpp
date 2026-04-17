@@ -43,7 +43,7 @@ public:
 
     // mpi_counts, mpi_displs, mpi_type, mpi_count are all forwarded through view_interface.
 
-    auto mpi_data() {
+    auto mpi_ptr() {
         auto const&    counts     = mpi::experimental::counts(base_);
         auto const&    displs     = mpi::experimental::displs(base_);
         auto const*    counts_ptr = std::ranges::data(counts);
@@ -68,7 +68,7 @@ public:
             }
         }
         kamping::ranges::resize_for_receive(base_, total);
-        return mpi::experimental::data(base_);
+        return mpi::experimental::ptr(base_);
     }
 };
 
@@ -84,7 +84,7 @@ namespace kamping::views {
 
 /// Wraps a base buffer (which must already provide mpi_counts() and mpi_displs()
 /// via e.g. with_counts | auto_displs or with_counts | with_displs) so the
-/// underlying data buffer is resized to the correct total size on mpi_data().
+/// underlying data buffer is resized to the correct total size on mpi_ptr().
 /// Use as: buf | with_counts(...) | auto_displs(...) | resize_v
 inline constexpr struct resize_v_fn : kamping::ranges::adaptor_closure<resize_v_fn> {
     template <typename R>

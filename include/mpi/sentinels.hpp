@@ -18,7 +18,7 @@ namespace mpi::experimental {
 ///
 ///   v2::send(v2::bottom | views::with_type(my_abs_type) | views::with_size(1), dest, comm);
 struct bottom_t {
-    static void* mpi_data() noexcept { return MPI_BOTTOM; }
+    static void* mpi_ptr() noexcept { return MPI_BOTTOM; }
 };
 inline constexpr bottom_t bottom{};
 
@@ -28,7 +28,7 @@ inline constexpr bottom_t bottom{};
 /// `recv_buffer`. The receive buffer must be pre-sized; deferred resize is
 /// not supported for in-place operations.
 struct inplace_t {
-    static void*          mpi_data()  noexcept { return MPI_IN_PLACE; }
+    static void*          mpi_ptr()  noexcept { return MPI_IN_PLACE; }
     static std::ptrdiff_t mpi_count() noexcept { return 0; }
     static MPI_Datatype   mpi_type()  noexcept { return MPI_DATATYPE_NULL; }
 };
@@ -41,7 +41,7 @@ inline constexpr inplace_t inplace{};
 ///
 ///   v2::gather(local_data, null_buf, root, comm);  // non-root
 struct null_buf_t {
-    static void*          mpi_data()  noexcept { return nullptr; }
+    static void*          mpi_ptr()  noexcept { return nullptr; }
     static std::ptrdiff_t mpi_count() noexcept { return 0; }
     static MPI_Datatype   mpi_type()  noexcept { return MPI_DATATYPE_NULL; }
 };

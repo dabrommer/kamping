@@ -17,11 +17,11 @@ namespace mpi::experimental {
 /// receive buffer. Satisfies `send_buffer` (data() is void*, convertible to
 /// void const*) and `recv_buffer` (data() is void*).
 struct mpi_span {
-    void*          data; ///< Pointer to the first element.
+    void*          ptr; ///< Pointer to the first element.
     std::ptrdiff_t size; ///< Number of elements.
     MPI_Datatype   type; ///< MPI datatype of each element.
 
-    void*          mpi_data()  noexcept       { return data; }
+    void*          mpi_ptr()  noexcept       { return ptr; }
     std::ptrdiff_t mpi_count() const noexcept { return size; }
     MPI_Datatype   mpi_type()  const noexcept { return type; }
 };
@@ -32,13 +32,13 @@ struct mpi_span {
 /// `counts` and `displs` must point to arrays of length `comm_size`. The
 /// caller is responsible for keeping those arrays alive.
 struct mpi_span_v {
-    void*        data;      ///< Pointer to the first element.
+    void*        ptr;      ///< Pointer to the first element.
     MPI_Datatype type;      ///< MPI datatype of each element.
     int const*   counts;    ///< Per-rank element counts (length: comm_size).
     int const*   displs;    ///< Per-rank displacements  (length: comm_size).
     int          comm_size; ///< Number of ranks.
 
-    void*        mpi_data() noexcept       { return data; }
+    void*        mpi_ptr() noexcept       { return data; }
     MPI_Datatype mpi_type() const noexcept { return type; }
 
     std::span<int const> mpi_counts() const noexcept {

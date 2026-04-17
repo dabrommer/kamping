@@ -65,16 +65,16 @@ struct view_interface : public view_interface_base, public std::ranges::view_int
         return mpi::experimental::count(derived().base());
     }
 
-    constexpr auto mpi_data()
-        requires mpi::experimental::has_mpi_data<decltype(derived().base())>
+    constexpr auto mpi_ptr()
+        requires mpi::experimental::has_mpi_ptr<decltype(derived().base())>
     {
-        return mpi::experimental::data(derived().base());
+        return mpi::experimental::ptr(derived().base());
     }
 
-    constexpr auto mpi_data() const
-        requires mpi::experimental::has_mpi_data<decltype(derived().base())>
+    constexpr auto mpi_ptr() const
+        requires mpi::experimental::has_mpi_ptr<decltype(derived().base())>
     {
-        return mpi::experimental::data(derived().base());
+        return mpi::experimental::ptr(derived().base());
     }
 
     constexpr auto mpi_counts()

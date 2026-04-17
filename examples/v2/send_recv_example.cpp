@@ -34,10 +34,10 @@ struct mpi::experimental::buffer_traits<my_struct> {
     static std::ptrdiff_t count(my_struct const&) {
         return 1;
     }
-    static int const* data(my_struct const& t) {
+    static int const* ptr(my_struct const& t) {
         return &t.val;
     }
-    static int* data(my_struct& t) {
+    static int* ptr(my_struct& t) {
         return &t.val;
     }
     static MPI_Datatype type(my_struct const&) {

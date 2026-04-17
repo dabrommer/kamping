@@ -15,11 +15,11 @@ template <
     convertible_to_mpi_handle<MPI_Comm> Comm = MPI_Comm>
 void alltoallv(SBuf&& sbuf, RBuf&& rbuf, Comm const& comm = MPI_COMM_WORLD) {
     int err = MPI_Alltoallv(
-        data(sbuf),
+        ptr(sbuf),
         std::ranges::data(counts(sbuf)),
         std::ranges::data(displs(sbuf)),
         type(sbuf),
-        data(rbuf),
+        ptr(rbuf),
         std::ranges::data(counts(rbuf)),
         std::ranges::data(displs(rbuf)),
         type(rbuf),

@@ -1,3 +1,4 @@
+#include <cstddef>
 #include <numeric>
 #include <vector>
 
@@ -17,13 +18,13 @@ TEST(V2AlltoallTest, SendRankToAll) {
     MPI_Comm_size(MPI_COMM_WORLD, &size);
 
     // send_buf[j] = rank for all j: this rank sends its rank value to every destination.
-    std::vector<int> send_data(size, rank);
-    std::vector<int> recv_data(size);
+    std::vector<int> send_data(static_cast<std::size_t>(size), rank);
+    std::vector<int> recv_data(static_cast<std::size_t>(size));
 
     kamping::v2::alltoall(send_data, recv_data);
 
     // recv_data[i] = i: received the rank of sender i from each sender.
-    std::vector<int> expected(size);
+    std::vector<int> expected(static_cast<std::size_t>(size));
     std::iota(expected.begin(), expected.end(), 0);
     EXPECT_EQ(recv_data, expected);
 }
@@ -34,12 +35,12 @@ TEST(V2AlltoallTest, DeferredRecvBuffer) {
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-    std::vector<int> send_data(size, rank);
+    std::vector<int> send_data(static_cast<std::size_t>(size), rank);
     std::vector<int> recv_data;
 
     kamping::v2::alltoall(send_data, recv_data | kamping::views::resize);
 
-    std::vector<int> expected(size);
+    std::vector<int> expected(static_cast<std::size_t>(size));
     std::iota(expected.begin(), expected.end(), 0);
     EXPECT_EQ(recv_data, expected);
 }
@@ -50,18 +51,18 @@ TEST(V2AlltoallTest, Transpose) {
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-    std::vector<int> send_data(size);
+    std::vector<int> send_data(static_cast<std::size_t>(size));
     for (int j = 0; j < size; ++j) {
-        send_data[j] = rank * size + j;
+        send_data[static_cast<std::size_t>(j)] = rank * size + j;
     }
-    std::vector<int> recv_data(size);
+    std::vector<int> recv_data(static_cast<std::size_t>(size));
 
     kamping::v2::alltoall(send_data, recv_data);
 
     // recv_data[i] = i * size + rank: the rank-th column of the matrix.
-    std::vector<int> expected(size);
+    std::vector<int> expected(static_cast<std::size_t>(size));
     for (int i = 0; i < size; ++i) {
-        expected[i] = i * size + rank;
+        expected[static_cast<std::size_t>(i)] = i * size + rank;
     }
     EXPECT_EQ(recv_data, expected);
 }

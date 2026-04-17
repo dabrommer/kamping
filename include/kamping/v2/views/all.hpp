@@ -9,8 +9,8 @@
 namespace kamping::ranges {
 
 /// Non-owning view over an lvalue. T is unconstrained — supports both ranges and
-/// non-range buffer types (e.g. a struct with mpi_data()/mpi_count() but no begin()/end()).
-/// All MPI protocol methods (mpi_data, mpi_count, mpi_type, and future mpi_resize_for_receive)
+/// non-range buffer types (e.g. a struct with mpi_ptr()/mpi_count() but no begin()/end()).
+/// All MPI protocol methods (mpi_ptr, mpi_count, mpi_type, and future mpi_resize_for_receive)
 /// are forwarded automatically via view_interface.
 template <typename T>
 class ref_view : public view_interface<ref_view<T>> {

@@ -7,13 +7,10 @@
 #include "mpi/handle.hpp"
 
 namespace mpi::experimental {
-template <
-    send_recv_buffer                    SRBuf,
-    rank                                Root = int,
-    convertible_to_mpi_handle<MPI_Comm> Comm = MPI_Comm>
+template <send_recv_buffer SRBuf, rank Root = int, convertible_to_mpi_handle<MPI_Comm> Comm = MPI_Comm>
 void bcast(SRBuf&& send_recv_buf, Root root = 0, Comm const& comm = MPI_COMM_WORLD) {
     int err = MPI_Bcast(
-        data(send_recv_buf),
+        ptr(send_recv_buf),
         static_cast<int>(count(send_recv_buf)),
         type(send_recv_buf),
         to_rank(root),

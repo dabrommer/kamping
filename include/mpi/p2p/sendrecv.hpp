@@ -28,12 +28,12 @@ void sendrecv(
     Status&&    status
 ) {
     int err = MPI_Sendrecv(
-        data(sbuf),
+        ptr(sbuf),
         static_cast<int>(count(sbuf)),
         type(sbuf),
         to_rank(dest),
         to_tag(send_tag),
-        data(rbuf),
+        ptr(rbuf),
         static_cast<int>(count(rbuf)),
         type(rbuf),
         to_rank(source),

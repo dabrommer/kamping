@@ -42,7 +42,7 @@ inline constexpr bool enable_borrowed_buffer<with_size_view<Base>> = enable_borr
 
 namespace views {
 
-// Useful for non-range objects that expose mpi_data() but no size — compose with with_type
+// Useful for non-range objects that expose mpi_ptr() but no size — compose with with_type
 // to build a complete data_buffer. For limiting the element count of a range, prefer std::views::take.
 inline constexpr kamping::ranges::adaptor<1, decltype([](auto&& r, std::ptrdiff_t size) {
     return kamping::ranges::with_size_view(std::forward<decltype(r)>(r), size);

@@ -17,7 +17,7 @@ TEST(V2AllgathervTest, VariableLengthSend) {
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-    std::vector<int> send_data(rank + 1, rank);
+    std::vector<int> send_data(static_cast<std::size_t>(rank) + 1, rank);
     std::vector<int> recv_data;
 
     kamping::v2::allgatherv(
@@ -27,7 +27,7 @@ TEST(V2AllgathervTest, VariableLengthSend) {
 
     std::vector<int> expected;
     for (int r = 0; r < size; ++r) {
-        expected.insert(expected.end(), r + 1, r);
+        expected.insert(expected.end(), static_cast<std::size_t>(r) + 1, r);
     }
     EXPECT_EQ(recv_data, expected);
 }
@@ -46,7 +46,7 @@ TEST(V2AllgathervTest, UniformSingleElementSend) {
         recv_data | kamping::views::auto_counts() | kamping::views::auto_displs() | kamping::views::resize_v
     );
 
-    std::vector<int> expected(size);
+    std::vector<int> expected(static_cast<std::size_t>(size));
     std::iota(expected.begin(), expected.end(), 0);
     EXPECT_EQ(recv_data, expected);
 }
@@ -57,7 +57,7 @@ TEST(V2AllgathervTest, RankZeroSendsEmptyBuffer) {
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-    std::vector<int> send_data(rank, rank); // rank 0 → empty
+    std::vector<int> send_data(static_cast<std::size_t>(rank), rank); // rank 0 → empty
     std::vector<int> recv_data;
 
     kamping::v2::allgatherv(
@@ -67,7 +67,7 @@ TEST(V2AllgathervTest, RankZeroSendsEmptyBuffer) {
 
     std::vector<int> expected;
     for (int r = 1; r < size; ++r) {
-        expected.insert(expected.end(), r, r);
+        expected.insert(expected.end(), static_cast<std::size_t>(r), r);
     }
     EXPECT_EQ(recv_data, expected);
 }
@@ -78,9 +78,9 @@ TEST(V2AllgathervTest, UserProvidedCountsBuffer) {
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-    std::vector<int> send_data(rank + 1, rank);
+    std::vector<int> send_data(static_cast<std::size_t>(rank) + 1, rank);
     std::vector<int> recv_data;
-    std::vector<int> counts(size); // pre-sized, no auto-resize
+    std::vector<int> counts(static_cast<std::size_t>(size)); // pre-sized, no auto-resize
 
     kamping::v2::allgatherv(
         send_data,
@@ -89,11 +89,11 @@ TEST(V2AllgathervTest, UserProvidedCountsBuffer) {
 
     std::vector<int> expected;
     for (int r = 0; r < size; ++r) {
-        expected.insert(expected.end(), r + 1, r);
+        expected.insert(expected.end(), static_cast<std::size_t>(r) + 1, r);
     }
     EXPECT_EQ(recv_data, expected);
     // counts should have been filled by infer()
-    EXPECT_EQ(counts[rank], rank + 1);
+    EXPECT_EQ(counts[static_cast<std::size_t>(rank)], rank + 1);
 }
 
 // User-provided counts buffer (no auto-resize of counts).
@@ -102,16 +102,16 @@ TEST(V2AllgathervTest, ExplicitCountsAutoDisplsNoResize) {
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-    std::vector<int> send_data(rank + 1, rank);
-    std::vector<int> recv_data(size * (size + 1) / 2);
-    std::vector<int> counts(size); // pre-sized, no auto-resize
+    std::vector<int> send_data(static_cast<std::size_t>(rank) + 1, rank);
+    std::vector<int> recv_data(static_cast<std::size_t>(size) * (static_cast<std::size_t>(size) + 1) / 2);
+    std::vector<int> counts(static_cast<std::size_t>(size)); // pre-sized, no auto-resize
     std::ranges::iota(counts, 1);
 
     kamping::v2::allgatherv(send_data, recv_data | kamping::views::with_counts(counts) | kamping::views::auto_displs());
 
     std::vector<int> expected;
     for (int r = 0; r < size; ++r) {
-        expected.insert(expected.end(), r + 1, r);
+        expected.insert(expected.end(), static_cast<std::size_t>(r) + 1, r);
     }
     EXPECT_EQ(recv_data, expected);
 }

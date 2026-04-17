@@ -15,7 +15,7 @@ template <
     convertible_to_mpi_handle_ptr<MPI_Request> Request = MPI_Request*>
 void irecv(RBuf&& rbuf, Source source, Tag tag, Comm const& comm, Request&& request) {
     int err = MPI_Irecv(
-        data(rbuf),
+        ptr(rbuf),
         static_cast<int>(count(rbuf)),
         type(rbuf),
         to_rank(source),

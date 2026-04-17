@@ -14,7 +14,7 @@ template <
     convertible_to_mpi_handle<MPI_Comm> Comm = MPI_Comm>
 void send(SBuf&& sbuf, Dest dest, Tag tag = 0, Comm const& comm = MPI_COMM_WORLD) {
     int err = MPI_Send(
-        data(sbuf),
+        ptr(sbuf),
         static_cast<int>(count(sbuf)),
         type(sbuf),
         to_rank(dest),
@@ -33,7 +33,7 @@ template <
     convertible_to_mpi_handle<MPI_Comm> Comm = MPI_Comm>
 void bsend(SBuf&& sbuf, Dest dest, Tag tag = 0, Comm const& comm = MPI_COMM_WORLD) {
     int err = MPI_Bsend(
-        data(sbuf),
+        ptr(sbuf),
         static_cast<int>(count(sbuf)),
         type(sbuf),
         to_rank(dest),
@@ -52,7 +52,7 @@ template <
     convertible_to_mpi_handle<MPI_Comm> Comm = MPI_Comm>
 void ssend(SBuf&& sbuf, Dest dest, Tag tag = 0, Comm const& comm = MPI_COMM_WORLD) {
     int err = MPI_Ssend(
-        data(sbuf),
+        ptr(sbuf),
         static_cast<int>(count(sbuf)),
         type(sbuf),
         to_rank(dest),
@@ -71,7 +71,7 @@ template <
     convertible_to_mpi_handle<MPI_Comm> Comm = MPI_Comm>
 void rsend(SBuf&& sbuf, Dest dest, Tag tag = 0, Comm const& comm = MPI_COMM_WORLD) {
     int err = MPI_Rsend(
-        data(sbuf),
+        ptr(sbuf),
         static_cast<int>(count(sbuf)),
         type(sbuf),
         to_rank(dest),

@@ -13,7 +13,7 @@ template <
     convertible_to_mpi_handle_ptr<MPI_Status>  Status>
 void mrecv(RBuf&& rbuf, Message&& message, Status&& status) {
     int err = MPI_Mrecv(
-        data(rbuf),
+        ptr(rbuf),
         static_cast<int>(count(rbuf)),
         type(rbuf),
         handle_ptr(message),

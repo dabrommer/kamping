@@ -21,7 +21,7 @@ void recv(
     Status&&    status = MPI_STATUS_IGNORE
 ) {
     int err = MPI_Recv(
-        data(rbuf),
+        ptr(rbuf),
         static_cast<int>(count(rbuf)),
         type(rbuf),
         to_rank(source),

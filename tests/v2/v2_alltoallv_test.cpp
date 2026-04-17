@@ -1,3 +1,4 @@
+#include <cstddef>
 #include <numeric>
 #include <vector>
 
@@ -13,17 +14,16 @@ using namespace ::testing;
 
 // Helper: build send buffer + counts + exclusive-scan displs where rank i sends (i+1) copies of
 // (rank*10 + j) to rank j.
-static std::tuple<std::vector<int>, std::vector<int>, std::vector<int>>
-build_send(int rank, int size) {
-    std::vector<int> counts(size);
+static std::tuple<std::vector<int>, std::vector<int>, std::vector<int>> build_send(int rank, int size) {
+    std::vector<int> counts(static_cast<std::size_t>(size));
     std::vector<int> data;
     for (int j = 0; j < size; ++j) {
-        counts[j] = rank + 1;
+        counts[static_cast<std::size_t>(j)] = rank + 1;
         for (int k = 0; k < rank + 1; ++k) {
             data.push_back(rank * 10 + j);
         }
     }
-    std::vector<int> displs(size);
+    std::vector<int> displs(static_cast<std::size_t>(size));
     std::exclusive_scan(counts.begin(), counts.end(), displs.begin(), 0);
     return {data, counts, displs};
 }
@@ -81,9 +81,9 @@ TEST(V2AlltoallvTest, UniformSingleElement) {
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
 
-    std::vector<int> send_data(size, rank);
-    std::vector<int> send_counts(size, 1);
-    std::vector<int> send_displs(size);
+    std::vector<int> send_data(static_cast<std::size_t>(size), rank);
+    std::vector<int> send_counts(static_cast<std::size_t>(size), 1);
+    std::vector<int> send_displs(static_cast<std::size_t>(size));
     std::iota(send_displs.begin(), send_displs.end(), 0);
 
     std::vector<int> recv_data;
@@ -92,7 +92,7 @@ TEST(V2AlltoallvTest, UniformSingleElement) {
         recv_data | kamping::views::auto_recv_v
     );
 
-    std::vector<int> expected(size);
+    std::vector<int> expected(static_cast<std::size_t>(size));
     std::iota(expected.begin(), expected.end(), 0);
     EXPECT_EQ(recv_data, expected);
 }
@@ -104,8 +104,8 @@ TEST(V2AlltoallvTest, AllEmpty) {
     MPI_Comm_size(MPI_COMM_WORLD, &size);
 
     std::vector<int> send_data;
-    std::vector<int> send_counts(size, 0);
-    std::vector<int> send_displs(size, 0);
+    std::vector<int> send_counts(static_cast<std::size_t>(size), 0);
+    std::vector<int> send_displs(static_cast<std::size_t>(size), 0);
 
     std::vector<int> recv_data;
     kamping::v2::alltoallv(

@@ -13,7 +13,7 @@ namespace kamping::views {
 ///
 /// Attaches owned counts and displacement buffers to the base data buffer and marks it
 /// for automatic resize on receive. The full deferred protocol (set_comm_size / MPI writes
-/// into counts / commit_counts / lazy displ computation / resize on mpi_data) is provided
+/// into counts / commit_counts / lazy displ computation / resize on mpi_ptr) is provided
 /// by the composed views.
 ///
 /// Usage:

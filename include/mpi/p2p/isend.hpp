@@ -15,7 +15,7 @@ template <
     convertible_to_mpi_handle_ptr<MPI_Request> Request = MPI_Request*>
 void isend(SBuf&& sbuf, Dest dest, Tag tag, Comm const& comm, Request&& request) {
     int err = MPI_Isend(
-        data(sbuf),
+        ptr(sbuf),
         static_cast<int>(count(sbuf)),
         type(sbuf),
         to_rank(dest),
@@ -36,7 +36,7 @@ template <
     convertible_to_mpi_handle_ptr<MPI_Request> Request = MPI_Request*>
 void ibsend(SBuf&& sbuf, Dest dest, Tag tag, Comm const& comm, Request&& request) {
     int err = MPI_Ibsend(
-        data(sbuf),
+        ptr(sbuf),
         static_cast<int>(count(sbuf)),
         type(sbuf),
         to_rank(dest),
@@ -57,7 +57,7 @@ template <
     convertible_to_mpi_handle_ptr<MPI_Request> Request = MPI_Request*>
 void issend(SBuf&& sbuf, Dest dest, Tag tag, Comm const& comm, Request&& request) {
     int err = MPI_Issend(
-        data(sbuf),
+        ptr(sbuf),
         static_cast<int>(count(sbuf)),
         type(sbuf),
         to_rank(dest),
@@ -78,7 +78,7 @@ template <
     convertible_to_mpi_handle_ptr<MPI_Request> Request = MPI_Request*>
 void irsend(SBuf&& sbuf, Dest dest, Tag tag, Comm const& comm, Request&& request) {
     int err = MPI_Irsend(
-        data(sbuf),
+        ptr(sbuf),
         static_cast<int>(count(sbuf)),
         type(sbuf),
         to_rank(dest),

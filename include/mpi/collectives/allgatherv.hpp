@@ -15,10 +15,10 @@ template <
     convertible_to_mpi_handle<MPI_Comm> Comm = MPI_Comm>
 void allgatherv(SBuf&& sbuf, RBuf&& rbuf, Comm const& comm = MPI_COMM_WORLD) {
     int err = MPI_Allgatherv(
-        data(sbuf),
+        ptr(sbuf),
         static_cast<int>(count(sbuf)),
         type(sbuf),
-        data(rbuf),
+        ptr(rbuf),
         std::ranges::data(counts(rbuf)),
         std::ranges::data(displs(rbuf)),
         type(rbuf),

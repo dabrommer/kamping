@@ -125,7 +125,7 @@ public:
 
     /// Returns a mutable pointer: satisfies send_buffer (void const* accepted) and
     /// recv_buffer (void* required). Serializes lazily on the send side.
-    void* mpi_data() const {
+    void* mpi_ptr() const {
         if (!needs_deserialization_ && !serialized_) do_serialize();
         return buffer_.data();
     }

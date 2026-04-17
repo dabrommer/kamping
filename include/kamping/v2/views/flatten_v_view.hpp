@@ -24,7 +24,7 @@ namespace ranges {
 /// on first access to any MPI protocol method. Counts are derived from inner
 /// range sizes, displacements via exclusive scan.
 ///
-/// mpi_type/mpi_count/mpi_data are forwarded from base() (= flat_buf_) via
+/// mpi_type/mpi_count/mpi_ptr are forwarded from base() (= flat_buf_) via
 /// view_interface. Calling base() triggers ensure_flattened(), so the flat buffer
 /// is always fully populated before any accessor reads it.
 ///
@@ -105,7 +105,7 @@ class flatten_v_view
 
 public:
     /// Returns the flat data buffer, triggering lazy flattening on first call.
-    /// view_interface forwards mpi_count/mpi_data/mpi_type from here automatically.
+    /// view_interface forwards mpi_count/mpi_ptr/mpi_type from here automatically.
     FlatBuf const& base() const& {
         ensure_flattened();
         return flat_buf_;

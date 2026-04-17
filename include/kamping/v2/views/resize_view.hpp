@@ -9,9 +9,9 @@
 
 namespace kamping::ranges {
 
-/// Wraps a resizable container and defers the actual resize until mpi_data() is first accessed.
+/// Wraps a resizable container and defers the actual resize until mpi_ptr() is first accessed.
 /// set_recv_count(n) is called by the collective after inferring n via infer(). mpi_count()
-/// returns the stored count immediately; mpi_data() triggers the resize on first call.
+/// returns the stored count immediately; mpi_ptr() triggers the resize on first call.
 /// mpi_type() is forwarded from the base via view_interface.
 template <typename Base>
 class resize_view : public view_interface<resize_view<Base>> {
@@ -38,13 +38,13 @@ public:
     }
 
     /// Triggers the lazy resize on first access, then returns the data pointer.
-    /// Overrides view_interface::mpi_data().
-    auto mpi_data() {
+    /// Overrides view_interface::mpi_ptr().
+    auto mpi_ptr() {
         if (needs_resize_) {
             kamping::ranges::resize_for_receive(base_, recv_count_);
             needs_resize_ = false;
         }
-        return mpi::experimental::data(base_);
+        return mpi::experimental::ptr(base_);
     }
 };
 

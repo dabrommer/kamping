@@ -30,10 +30,10 @@ int main(int, char*[]) {
     {
         std::vector<int> sbuf{kamping::world_rank_signed(), kamping::world_rank_signed()};
         auto             v = kamping::v2::allgatherv(
-                             sbuf,
-                             std::vector<int>{} | kamping::views::auto_counts() | kamping::views::auto_displs()
-                                 | kamping::views::resize_v
-                         )
+                                 sbuf,
+                                 std::vector<int>{} | kamping::views::auto_counts() | kamping::views::auto_displs()
+                                     | kamping::views::resize_v
+        )
                                  .recv;
         std::println("allgatherv v={}", v);
     }

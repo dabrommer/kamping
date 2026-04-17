@@ -16,6 +16,7 @@ TEST(AutoCountsViewTest, SatisfiesExpectedConcepts) {
     std::vector<int> data{1, 2, 3};
 
     auto view = data | kamping::views::auto_counts();
+    mpi::experimental::ptr(view);
     static_assert(mpi::experimental::has_mpi_counts<decltype(view)>);
     static_assert(mpi::experimental::has_mpi_counts_mutable<decltype(view)>);
     static_assert(kamping::ranges::has_set_comm_size<decltype(view)>);
@@ -127,7 +128,7 @@ TEST(AutoCountsViewTest, MpiDataForwardsFromBase) {
     std::vector<int> data{1, 2, 3};
     auto             view = data | kamping::views::auto_counts();
 
-    EXPECT_EQ(mpi::experimental::data(view), data.data());
+    EXPECT_EQ(mpi::experimental::ptr(view), data.data());
 }
 
 // ── auto_displs integration ───────────────────────────────────────────────────
@@ -165,6 +166,6 @@ TEST(AutoCountsViewTest, ResizeVResizesDataBufferFromCounts) {
     }
     rbuf.commit_counts();
 
-    (void)rbuf.mpi_data();
+    (void)rbuf.mpi_ptr();
     EXPECT_EQ(data.size(), 6u);
 }
