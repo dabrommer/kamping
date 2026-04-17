@@ -262,3 +262,9 @@ The same pattern applies to ranks (`to_rank`) and tags (`to_tag`), supporting bo
 - Doxygen required for all public API
 - No `using namespace` in headers
 - `auto` preferred for type deduction
+
+---
+
+## Design Documentation
+
+See **DESIGN.md** for step-by-step patterns for implementing new collectives, views, and handle wrappers.
