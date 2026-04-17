@@ -1,10 +1,12 @@
 #pragma once
 
 #include <cstddef>
+#include <optional>
 
+#include "kamping/kassert/kassert.hpp"
+#include "kamping/v2/ranges/ranges.hpp"
 #include "kamping/v2/views/adaptor.hpp"
 #include "kamping/v2/views/all.hpp"
-#include "kamping/v2/ranges/ranges.hpp"
 #include "kamping/v2/views/view_interface.hpp"
 
 namespace kamping::ranges {
@@ -15,33 +17,42 @@ namespace kamping::ranges {
 /// mpi_type() is forwarded from the base via view_interface.
 template <typename Base>
 class resize_view : public view_interface<resize_view<Base>> {
-    Base           base_;
-    std::ptrdiff_t recv_count_ = 0;
-    bool           needs_resize_ = false;
+    Base                          base_;
+    std::optional<std::ptrdiff_t> recv_count_   = std::nullopt;
+    bool                          needs_resize_ = false;
 
 public:
     template <typename R>
     explicit resize_view(R&& base) : base_(kamping::ranges::all(std::forward<R>(base))) {}
 
-    constexpr Base&       base() &      noexcept { return base_; }
-    constexpr Base const& base() const& noexcept { return base_; }
+    constexpr Base& base() & noexcept {
+        return base_;
+    }
+    constexpr Base const& base() const& noexcept {
+        return base_;
+    }
 
     /// Called by the collective with the inferred recv count. Does not resize yet.
     void set_recv_count(std::ptrdiff_t n) {
-        recv_count_  = n;
+        recv_count_   = n;
         needs_resize_ = true;
     }
 
     /// Returns the recv count set by set_recv_count(). Overrides view_interface::mpi_count().
     std::ptrdiff_t mpi_count() const {
-        return recv_count_;
+        if (recv_count_) {
+            return *recv_count_;
+        } else {
+            return static_cast<std::ptrdiff_t>(mpi::experimental::count(base_));
+        }
     }
 
     /// Triggers the lazy resize on first access, then returns the data pointer.
     /// Overrides view_interface::mpi_ptr().
     auto mpi_ptr() {
         if (needs_resize_) {
-            kamping::ranges::resize_for_receive(base_, recv_count_);
+            KAMPING_ASSERT(recv_count_.has_value());
+            kamping::ranges::resize_for_receive(base_, *recv_count_);
             needs_resize_ = false;
         }
         return mpi::experimental::ptr(base_);

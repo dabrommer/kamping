@@ -9,5 +9,6 @@ struct allgatherv {};
 struct alltoall {};
 struct alltoallv {};
 struct sendrecv {};
+struct reduce {};
 
 } // namespace kamping::comm_op

@@ -277,20 +277,42 @@ MPI_Op native_op(Op const& op) {
 `T` is never extracted at the top of `native_op` — `op_traits<Op, SBuf>::op()` is only
 instantiated in the `else` branch, where `mpi_op_for` already guarantees `SBuf` is a range.
 
-### Usage in `core::reduce` (and other reduction collectives)
+### Inplace handling for reduction collectives
+
+Reduction collectives (reduce, allreduce, scan, exscan) are fundamentally asymmetric across ranks:
+the buffer role differs depending on whether it's inplace and on which rank the operation is.
+
+**Design decision:** Branch on `ptr(sbuf) == MPI_IN_PLACE` to determine the correct interpretation:
+- **Inplace** (`sbuf` is sentinel): count/type from `rbuf`; only valid on root
+- **Normal** (two-buffer): count/type from `sbuf`; on root, must match `rbuf` (asserted)
+
+This avoids forcing reduce into a false "recv-centric" model where the receive buffer describes
+all ranks' contributions.
 
 ```cpp
 template <send_buffer SBuf, recv_buffer RBuf, typename Op>
-    requires mpi_op_for<Op, SBuf>
 void reduce(SBuf&& sbuf, RBuf&& rbuf, Op&& op, int root, MPI_Comm comm) {
-    MPI_Reduce(
-        mpi::experimental::data(sbuf), mpi::experimental::data(rbuf), mpi::experimental::count(sbuf),
-        mpi::experimental::type(sbuf), native_op<SBuf>(op), root, comm
-    );
+    auto sbuf_ptr = ptr(sbuf);
+    int rank = 0;
+    MPI_Comm_rank(handle(comm), &rank);
+    int root_rank = to_rank(root);
+
+    if (sbuf_ptr == MPI_IN_PLACE) {
+        // Inplace: count and type from rbuf
+        KASSERT(rank == root_rank, "inplace reduce only valid on root");
+        MPI_Reduce(sbuf_ptr, ptr(rbuf), count(rbuf), type(rbuf), as_mpi_op(op, sbuf, rbuf), root_rank, comm);
+    } else {
+        // Normal: count and type from sbuf
+        KASSERT(rank != root_rank || count(sbuf) == count(rbuf), "on root: counts must match");
+        KASSERT(rank != root_rank || type(sbuf) == type(rbuf), "on root: types must match");
+        MPI_Reduce(sbuf_ptr, ptr(rbuf), count(sbuf), type(sbuf), as_mpi_op(op, sbuf, rbuf), root_rank, comm);
+    }
 }
 ```
 
-No `if constexpr` at the collective level — op resolution is fully encapsulated in `native_op`.
+The infer() protocol remains unchanged: it only sets recv counts on root, and deferred buffers on
+non-root are simply never given the chance to be deferred (they are null_buf or similar).
+
 The same pattern applies to `allreduce`, `scan`, `exscan`.
 
 ### v2 responsibility
@@ -337,9 +359,11 @@ Three zero-overhead sentinel buffer types. All implemented.
 - [x] **`mpi::experimental::allgatherv`** / **`v2::allgatherv`**
 - [x] **`mpi::experimental::alltoall`** / **`v2::alltoall`**
 - [x] **`mpi::experimental::alltoallv`** / **`v2::alltoallv`**
-- [ ] **Blocking**: `allreduce`, `scatter`, `scatterv`, `gather`, `gatherv`, `reduce`, `scan`, `exscan`
-- [ ] **Non-blocking**: `iallreduce`, `iallgather`, `iallgatherv`, `ialltoall`, `ialltoallv`, `iscatter`, `iscatterv`, `igather`, `igatherv`, `ireduce`, `iscan`, `iexscan`, `ibarrier`
-- Follow the same layering as p2p: `core::` wraps MPI directly, `v2::` handles inference and result types
+- [x] **`mpi::experimental::reduce`** (core + v2 + infer); demonstrates inplace handling pattern for all reduction collectives
+- [ ] **Symmetric reduction** (defer): `allreduce`, `scan`, `exscan` — follow reduce inplace pattern
+- [ ] **Asymmetric collectives** (defer): `gather`, `scatter`, `scatterv`, `gatherv` — follow reduce asymmetric pattern
+- [ ] **Non-blocking** (defer): all `i*` variants — leverage iresult infrastructure from p2p
+- Architecture proven: `core::` wraps MPI directly, `v2::` handles inference and result types
 
 ### Collective interface design
 

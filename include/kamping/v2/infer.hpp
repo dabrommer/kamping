@@ -5,10 +5,10 @@
 #include <mpi.h>
 
 #include "kamping/v2/comm_op.hpp"
-#include "mpi/handle.hpp"
 #include "kamping/v2/ranges/concepts.hpp"
 #include "kamping/v2/ranges/ranges.hpp"
 #include "kamping/v2/status.hpp"
+#include "mpi/handle.hpp"
 
 /// @file
 /// infer() is a customization point that transfers metadata from the sending to the receiving
@@ -116,6 +116,18 @@ void infer(
             MPI_STATUS_IGNORE
         );
         rbuf.set_recv_count(static_cast<std::ptrdiff_t>(recv_count));
+    }
+}
+
+template <mpi::experimental::send_buffer SBuf, mpi::experimental::recv_buffer RBuf>
+void infer(comm_op::reduce, SBuf const& sbuf, RBuf& rbuf, MPI_Op, int root, MPI_Comm comm) {
+    if constexpr (kamping::ranges::deferred_recv_buf<RBuf>) {
+        int rank = 0;
+        MPI_Comm_rank(comm, &rank);
+        auto sbuf_ptr = mpi::experimental::ptr(sbuf);
+        if (rank == root && sbuf_ptr != MPI_IN_PLACE) {
+            rbuf.set_recv_count(mpi::experimental::count(sbuf));
+        }
     }
 }
 
