@@ -154,5 +154,22 @@ void infer(comm_op::gather, SBuf const& sbuf, RBuf& rbuf, int root, MPI_Comm com
         }
     }
 }
+template <mpi::experimental::send_buffer SBuf, mpi::experimental::recv_buffer_v RBuf>
+void infer(comm_op::gatherv, SBuf const& sbuf, RBuf& rbuf, int root, MPI_Comm comm) {
+    if constexpr (kamping::ranges::deferred_recv_buf_v<RBuf>) {
+        int comm_size = 0;
+        int comm_rank = 0;
+        MPI_Comm_size(comm, &comm_size);
+        MPI_Comm_rank(comm, &comm_rank);
+        if (comm_rank == root) {
+            rbuf.set_comm_size(comm_size);
+        }
+        int my_count = static_cast<int>(mpi::experimental::count(sbuf));
+        MPI_Gather(&my_count, 1, MPI_INT, std::ranges::data(mpi::experimental::counts(rbuf)), 1, MPI_INT, root, comm);
+        if (comm_rank == root) {
+            rbuf.commit_counts();
+        }
+    }
+}
 
 } // namespace kamping

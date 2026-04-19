@@ -362,7 +362,9 @@ Three zero-overhead sentinel buffer types. All implemented.
 - [x] **`mpi::experimental::reduce`** / **`v2::reduce`** (core + v2 + infer); demonstrates inplace handling pattern for all reduction collectives
 - [x] **`mpi::experimental::allreduce`** / **`v2::allreduce`** (core + v2 + infer); symmetric, no root
 - [ ] **Symmetric reduction** (defer): `scan`, `exscan` — follow reduce/allreduce inplace pattern
-- [ ] **Asymmetric collectives**: `gather` → `gatherv` (gather's infer needed by gatherv's infer); `scatter`, `scatterv` follow
+- [x] **`mpi::experimental::gather`** / **`v2::gather`** (core + v2 + infer); demonstrates asymmetric collective pattern
+- [x] **`mpi::experimental::gatherv`** / **`v2::gatherv`** (core + v2 + infer); introduces `null_buf_v` (core) and `auto_null_recv_v()` (v2) for non-root deferred participation
+- [ ] **Asymmetric collectives**: `scatter`, `scatterv` — follow gather/gatherv pattern
 - [ ] **Non-blocking** (defer): all `i*` variants — leverage iresult infrastructure from p2p
 - Architecture proven: `core::` wraps MPI directly, `v2::` handles inference and result types
 

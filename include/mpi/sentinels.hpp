@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <span>
 
 #include <mpi.h>
 
@@ -46,5 +47,21 @@ struct null_buf_t {
     static MPI_Datatype   mpi_type()  noexcept { return MPI_DATATYPE_NULL; }
 };
 inline constexpr null_buf_t null_buf{};
+
+/// Variadic sentinel recv buffer that passes `nullptr` as the data pointer
+/// and empty spans for counts and displacements. Satisfies `recv_buffer_v`.
+/// Used for non-root ranks in variadic collectives (e.g. gatherv, scatterv)
+/// when explicit per-rank counts are already known and no deferred inference
+/// is needed. For inference-triggered resizing on root, use
+/// `kamping::v2::auto_null_recv_v` instead.
+///
+///   v2::gatherv(local_data, null_buf_v, root, comm);  // non-root, explicit counts on root
+struct null_buf_v_t {
+    static void*                mpi_ptr()    noexcept { return nullptr; }
+    static MPI_Datatype         mpi_type()   noexcept { return MPI_DATATYPE_NULL; }
+    static std::span<int const> mpi_counts() noexcept { return {}; }
+    static std::span<int const> mpi_displs() noexcept { return {}; }
+};
+inline constexpr null_buf_v_t null_buf_v{};
 
 } // namespace mpi::experimental
