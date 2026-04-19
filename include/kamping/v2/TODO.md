@@ -359,9 +359,10 @@ Three zero-overhead sentinel buffer types. All implemented.
 - [x] **`mpi::experimental::allgatherv`** / **`v2::allgatherv`**
 - [x] **`mpi::experimental::alltoall`** / **`v2::alltoall`**
 - [x] **`mpi::experimental::alltoallv`** / **`v2::alltoallv`**
-- [x] **`mpi::experimental::reduce`** (core + v2 + infer); demonstrates inplace handling pattern for all reduction collectives
-- [ ] **Symmetric reduction** (defer): `allreduce`, `scan`, `exscan` — follow reduce inplace pattern
-- [ ] **Asymmetric collectives** (defer): `gather`, `scatter`, `scatterv`, `gatherv` — follow reduce asymmetric pattern
+- [x] **`mpi::experimental::reduce`** / **`v2::reduce`** (core + v2 + infer); demonstrates inplace handling pattern for all reduction collectives
+- [x] **`mpi::experimental::allreduce`** / **`v2::allreduce`** (core + v2 + infer); symmetric, no root
+- [ ] **Symmetric reduction** (defer): `scan`, `exscan` — follow reduce/allreduce inplace pattern
+- [ ] **Asymmetric collectives**: `gather` → `gatherv` (gather's infer needed by gatherv's infer); `scatter`, `scatterv` follow
 - [ ] **Non-blocking** (defer): all `i*` variants — leverage iresult infrastructure from p2p
 - Architecture proven: `core::` wraps MPI directly, `v2::` handles inference and result types
 
@@ -376,17 +377,19 @@ single-buffer form there.
 
 | Collective | Single-buffer form | Notes |
 |---|---|---|
-| `allreduce(buf, op, comm)` | ✓ | All ranks transform in place |
-| `scan(buf, op, comm)` | ✓ | All ranks transform in place |
-| `exscan(buf, op, comm)` | ✓ | All ranks transform in place |
+| `allreduce(buf, op, comm)` | ✗ | Rejected: implicit inplace hurts readability; `allreduce(inplace, buf, op)` is already clean |
+| `scan(buf, op, comm)` | ✗ | Same reasoning as allreduce |
+| `exscan(buf, op, comm)` | ✗ | Same reasoning as allreduce |
 | `allgather(buf, comm)` | ✓ | All ranks: local data already at `rank*n` slot, rest filled in |
 | `gather` / `scatter` / `reduce` | ✗ | Buffer role differs by rank — always two-buffer |
 
 The inplace allgather precondition (local data pre-placed at `rank * n`) is implicit and
-documented but not enforced. For allreduce/scan/exscan, in-place is fully transparent.
+documented but not enforced.
 
-`v2::inplace` sentinel is still available as an explicit send argument in two-buffer forms
-for advanced use; most users never need it.
+**Decision (allreduce/scan/exscan):** No implicit single-buffer inplace form. The asymmetry with
+`reduce(sbuf, op, root)` (which means non-root send-only, not inplace) would make the rule
+"single-buffer = inplace" inconsistent across collectives. Prefer the explicit
+`allreduce(v2::inplace, buf, op)` which is already clean compared to the raw MPI C API.
 
 #### Asymmetric collectives: gather / scatter / reduce
 
