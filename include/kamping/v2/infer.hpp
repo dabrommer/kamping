@@ -172,4 +172,33 @@ void infer(comm_op::gatherv, SBuf const& sbuf, RBuf& rbuf, int root, MPI_Comm co
     }
 }
 
+template <mpi::experimental::send_buffer SBuf, mpi::experimental::recv_buffer RBuf>
+void infer(comm_op::scatter, SBuf const& sbuf, RBuf& rbuf, int root, MPI_Comm comm) {
+    if constexpr (kamping::ranges::deferred_recv_buf<RBuf>) {
+        int comm_size = 0;
+        MPI_Comm_size(comm, &comm_size);
+        int per_rank_count = static_cast<int>(mpi::experimental::count(sbuf)) / comm_size;
+        MPI_Bcast(&per_rank_count, 1, MPI_INT, root, comm);
+        rbuf.set_recv_count(static_cast<std::ptrdiff_t>(per_rank_count));
+    }
+}
+
+template <mpi::experimental::send_buffer_v SBuf, mpi::experimental::recv_buffer RBuf>
+void infer(comm_op::scatterv, SBuf const& sbuf, RBuf& rbuf, int root, MPI_Comm comm) {
+    if constexpr (kamping::ranges::deferred_recv_buf<RBuf>) {
+        int recv_count = 0;
+        MPI_Scatter(
+            std::ranges::data(mpi::experimental::counts(sbuf)),
+            1,
+            MPI_INT,
+            &recv_count,
+            1,
+            MPI_INT,
+            root,
+            comm
+        );
+        rbuf.set_recv_count(static_cast<std::ptrdiff_t>(recv_count));
+    }
+}
+
 } // namespace kamping

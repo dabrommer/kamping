@@ -13,4 +13,6 @@ struct reduce {};
 struct allreduce {};
 struct gather {};
 struct gatherv {};
+struct scatter {};
+struct scatterv {};
 } // namespace kamping::comm_op

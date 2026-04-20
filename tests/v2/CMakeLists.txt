@@ -43,3 +43,15 @@ kamping_register_mpi_test(
     FILES v2_gatherv_test.cpp
     CORES 1 2 4
 )
+
+kamping_register_mpi_test(
+    test_v2_scatter
+    FILES v2_scatter_test.cpp
+    CORES 1 2 4
+)
+
+kamping_register_mpi_test(
+    test_v2_scatterv
+    FILES v2_scatterv_test.cpp
+    CORES 1 2 4
+)
