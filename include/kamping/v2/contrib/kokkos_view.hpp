@@ -165,7 +165,7 @@ auto auto_kokkos_view(std::string const& label) {
 }
 
 /// Returns an owning rank-1 kokkos_view for receive
-/// Template parameter is the element type, e.g. unpack<int>()
+/// Template parameter is the element type, e.g. auto_kokkos_view<int>()
 template <typename T>
 auto auto_kokkos_view() {
     return auto_kokkos_view<T>("kamping-auto-kokkos-view");

@@ -25,4 +25,8 @@ if (TARGET Kokkos::kokkos)
     add_executable(example_v2_kokkos_send_recv kokkos_send_recv_example.cpp)
     target_link_libraries(example_v2_kokkos_send_recv PRIVATE kamping Kokkos::kokkos KokkosComm::KokkosComm)
     target_compile_options(example_v2_kokkos_send_recv PRIVATE ${KAMPING_WARNING_FLAGS})
+
+    add_executable(example_v2_kokkos_alltoallv kokkos_alltoallv_example.cpp)
+    target_link_libraries(example_v2_kokkos_alltoallv PRIVATE kamping Kokkos::kokkos KokkosComm::KokkosComm)
+    target_compile_options(example_v2_kokkos_alltoallv PRIVATE ${KAMPING_WARNING_FLAGS})
 endif ()
