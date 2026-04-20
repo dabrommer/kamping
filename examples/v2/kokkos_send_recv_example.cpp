@@ -5,12 +5,12 @@
 #include "kamping/communicator.hpp"
 #include "kamping/environment.hpp"
 #include "kamping/v2/contrib/kokkos_view.hpp"
-#include "kamping/v2/native_handle.hpp"
+#include "mpi/handle.hpp"
 #include "kamping/v2/p2p/recv.hpp"
 #include "kamping/v2/p2p/send.hpp"
 
 template <>
-struct kamping::bridge::native_handle_traits<kamping::Communicator<>> {
+struct mpi::experimental::handle_traits<kamping::Communicator<>> {
     static MPI_Comm handle(kamping::Communicator<> const& comm) {
         return comm.mpi_communicator();
     }
@@ -34,12 +34,12 @@ int main(int argc, char* argv[]) {
         }
         // Get a non-contiguous row view.
         auto row = Kokkos::subview(matrix, 1, Kokkos::ALL());
-        kamping::v2::send(row | kamping::views::kokkos, 1, 0, comm);
+        kamping::v2::send(row | kamping::v2::views::kokkos, 1, 0, comm);
 
     } else if (comm.rank() == 1) {
         matrix_t matrix("recv_matrix", 4, 5);
         auto     row      = Kokkos::subview(matrix, 2, Kokkos::ALL());
-        auto&    received = *(kamping::v2::recv(row | kamping::views::kokkos, 0, 0, comm));
+        auto&    received = *(kamping::v2::recv(row | kamping::v2::views::kokkos, 0, 0, comm));
         std::print("rank {} received row = [", comm.rank());
         for (std::size_t j = 0; j < received.extent(0); ++j) {
             std::print("{}{}", received(j), (j + 1 < received.extent(0)) ? ", " : "");
@@ -53,9 +53,9 @@ int main(int argc, char* argv[]) {
         for (std::size_t i = 0; i < v.extent(0); ++i) {
             v(i) = static_cast<int>(200 + i);
         }
-        kamping::v2::send(v | kamping::views::kokkos, 1, 0, comm);
+        kamping::v2::send(v | kamping::v2::views::kokkos, 1, 0, comm);
     } else if (comm.rank() == 1) {
-        auto  received = kamping::v2::recv(kamping::views::auto_kokkos_view<int>(), 0, 0, comm);
+        auto  received = kamping::v2::recv(kamping::v2::views::auto_kokkos_view<int>(), 0, 0, comm);
         auto& data     = *received;
         std::print("rank {} unpack recv = [", comm.rank());
         for (std::size_t i = 0; i < data.extent(0); ++i) {
@@ -72,10 +72,10 @@ int main(int argc, char* argv[]) {
                 matrix(i, j) = static_cast<int>(100 + 10 * i + j);
             }
         }
-        kamping::v2::send(matrix | kamping::views::kokkos, 1, 0, comm);
+        kamping::v2::send(matrix | kamping::v2::views::kokkos, 1, 0, comm);
 
     } else if (comm.rank() == 1) {
-        auto  received = kamping::v2::recv(kamping::views::auto_kokkos_view<int>(), 0, 0, comm);
+        auto  received = kamping::v2::recv(kamping::v2::views::auto_kokkos_view<int>(), 0, 0, comm);
         auto& data     = *received;
         std::print("rank {} unpack recv = [", comm.rank());
         for (std::size_t i = 0; i < data.extent(0); ++i) {

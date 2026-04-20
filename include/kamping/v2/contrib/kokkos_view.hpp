@@ -10,10 +10,9 @@
 #include <KokkosComm/impl/contiguous.hpp>
 #include <Kokkos_Core.hpp>
 
-#include "kamping/v2/ranges/adaptor_closure.hpp"
-#include "kamping/v2/ranges/concepts.hpp"
+#include "kamping/v2/views/adaptor.hpp"
 
-namespace kamping::ranges {
+namespace kamping::v2 {
 
 /// Wraps a Kokkos::View and packs it into a contiguous Kokkos::View.
 ///
@@ -121,17 +120,17 @@ public:
         needs_unpack_ = false;
     }
 
-    std::ptrdiff_t mpi_size() const {
+    std::ptrdiff_t mpi_count() const {
         return static_cast<std::ptrdiff_t>(base_ref().size());
     }
 
     MPI_Datatype mpi_type() const
-        requires has_mpi_type<std::span<scalar_type>>
+        requires mpi::experimental::has_mpi_type<std::span<scalar_type>>
     {
-        return kamping::ranges::type(std::span{base_ref().data(), base_ref().size()});
+        return kamping::types::mpi_type_traits<scalar_type>::data_type();
     }
 
-    void* mpi_data() const {
+    void* mpi_ptr() const {
         if (is_contiguous_) {
             return base_ref().data();
         }
@@ -148,13 +147,13 @@ template <typename T>
     requires(!std::is_lvalue_reference_v<T>)
 kokkos_view(T&&) -> kokkos_view<T>;
 
-} // namespace kamping::ranges
+} // namespace kamping::v2
 
-namespace kamping::views {
-inline constexpr struct kokkos_fn : kamping::ranges::adaptor_closure<kokkos_fn> {
+namespace kamping::v2::views {
+inline constexpr struct kokkos_fn : kamping::v2::adaptor_closure<kokkos_fn> {
     template <typename R>
     constexpr auto operator()(R&& r) const {
-        return kamping::ranges::kokkos_view(std::forward<R>(r));
+        return kamping::v2::kokkos_view(std::forward<R>(r));
     }
 } kokkos{};
 
@@ -162,7 +161,7 @@ inline constexpr struct kokkos_fn : kamping::ranges::adaptor_closure<kokkos_fn> 
 template <typename T>
 auto auto_kokkos_view(std::string const& label) {
     using view_t = Kokkos::View<T*, Kokkos::LayoutRight, Kokkos::HostSpace>;
-    return kamping::ranges::kokkos_view<view_t, true>(view_t(label, 0));
+    return kamping::v2::kokkos_view<view_t, true>(view_t(label, 0));
 }
 
 /// Returns an owning rank-1 kokkos_view for receive
@@ -172,4 +171,4 @@ auto auto_kokkos_view() {
     return auto_kokkos_view<T>("kamping-auto-kokkos-view");
 }
 
-} // namespace kamping::views
+} // namespace kamping::v2::views
