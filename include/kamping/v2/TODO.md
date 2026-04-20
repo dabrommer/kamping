@@ -41,17 +41,38 @@
   - Expose psets as a lazy range via `session::psets() → /*range of string*/` rather than
     requiring the caller to manage `begin`/`end` with an `Info` argument
 
+  **Ergonomic API:**
+
   ```cpp
-  kamping::v2::session s(ThreadLevel::multiple);
-  auto group = s.group_from_pset(kamping::v2::psets::world);
-  auto comm  = group->create_comm("my-tag");   // → comm_view (or v2::comm once owning comm exists)
+  kamping::v2::session session;
+
+  // Shortest form — no group name needed at all
+  auto comm = session.comm_from_pset(psets::world);
+
+  // Group as a short-lived temporary — freed immediately after MPI_Comm_create_from_group returns
+  auto comm = v2::comm(session.group_from_pset(psets::world));
+
+  // Named group — only when you need it for multiple comms or group queries
+  auto group = session.group_from_pset(psets::world);
+  auto comm1 = v2::comm(group, "tag-a");
+  auto comm2 = v2::comm(group, "tag-b");
   ```
+
+  **No `group::as_comm()`**: `as_X()` conventionally implies a cheap zero-cost conversion;
+  `MPI_Comm_create_from_group` is a collective operation and must not be named that way.
+  Instead, `v2::comm` has a constructor taking a `group const&` plus an optional tag and
+  info. When called with a temporary (`v2::comm(session.group_from_pset(...))`), the group
+  is freed at the end of the full expression — exactly the short lifetime users want.
+  Dependency direction is correct: `comm.hpp` → `group.hpp`.
+  `session::comm_from_pset(pset, tag = "", info = MPI_INFO_NULL)` is a one-liner
+  delegating to `v2::comm(group_from_pset(pset), tag, info)`.
 
 - [ ] **`v2::psets` namespace** — port `psets::world` / `psets::self` constants from PR #772.
 
 - [ ] **`Group` at `mpi::experimental::` layer** — `group_view` (non-owning) + `group` (owning).
-  `group_view::create_comm(tag, info)` → `comm_view` via `MPI_Comm_create_from_group`; wraps the
-  forward-declaration trick from PR #772 in a cleaner two-file split.
+  `group::as_comm(tag, info)` → `v2::comm` via `MPI_Comm_create_from_group`.
+  `group_view` exposes read-only accessors (size, rank, compare); `group` adds `as_comm`.
+  Wraps the forward-declaration trick from PR #772 in a cleaner two-file split.
 
 ## Handle types
 
