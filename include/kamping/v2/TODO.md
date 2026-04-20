@@ -4,11 +4,8 @@
 
 - [x] **`mpi::experimental::status`** / **`status_view`** — done (`include/mpi/status.hpp`); re-exported from `kamping::v2::` via `include/kamping/v2/status.hpp`
 - [x] **`mpi::experimental::comm_view`** — non-owning wrapper (`include/mpi/comm.hpp`); CRTP mixin `comm_accessors` with `.rank()`, `.size()`, `.native()`
-- [ ] **`kamping::v2::comm`** — owning wrapper; calls `MPI_Comm_free` on destruction (for subcommunicators)
-- [ ] **`kamping::v2::request_view`** — non-owning wrapper over `MPI_Request*`
-  - Satisfies `bridge::convertible_to_mpi_handle_ptr<MPI_Request>`
-  - Counterpart to `iresult` for interop with external request arrays
-  - No owning `request` planned — `iresult` covers the RAII case
+- [x] **`mpi::experimental::request_view`** — non-owning wrapper (`include/mpi/request.hpp`); re-exported from `kamping::v2::` via `include/kamping/v2/request.hpp`; used in `iresult_base` do_wait/do_test
+- [ ] **`kamping::v2::comm`** (deferred) — owning communicator; not needed until subcommunicator creation is a priority
 
 ## P2P
 
@@ -92,22 +89,19 @@ include/
 |---|---|
 | `kamping::ranges::` (concepts, accessor dispatch) | `mpi::experimental::` ✓ |
 | `kamping::core::` (bare MPI wrappers) | `mpi::experimental::` ✓ |
-| `kamping::views::` (view adaptors) | `kamping::views::` ✓ |
+| `kamping::views::` (view adaptor factories) | `kamping::v2::views::` ✓ |
 | `kamping::v2::` (high-level wrappers, infer) | `kamping::v2::` ✓ |
 
 ### Step-by-step tasks
 
-**[x] Step 1 — Move view infrastructure out of `ranges/` into `views/`**
+**[x] Step 1 — Eliminate `ranges/` subdirectory; migrate namespaces; rename tags → sentinels**
 
-  | File | Action |
-  |---|---|
-  | `ranges/view_interface.hpp` | `git mv` → `views/view_interface.hpp` ✓ |
-  | `ranges/all.hpp` | `git mv` → `views/all.hpp` ✓ |
-  | `ranges/adaptor.hpp` | `git mv` → `views/adaptor.hpp` ✓ |
-  | `ranges/concepts.hpp` | stays ✓ |
-  | `ranges/ranges.hpp` | stays ✓ |
-
-  `ranges/` now contains only headers that the core layer legitimately needs.
+  - `ranges/concepts.hpp` → `views/concepts.hpp` (namespace `kamping::v2::`) ✓
+  - `ranges/ranges.hpp` content merged into `views/view_interface.hpp` ✓
+  - `ranges/` directory deleted; top-level `ranges.hpp` deleted ✓
+  - `tags.hpp` → `sentinels.hpp`; `resize_t`/`monotonic_t` moved into `views/view_interface.hpp` ✓
+  - `kamping::ranges::` → `kamping::v2::` throughout all view and binding headers ✓
+  - `kamping::views::` factories → `kamping::v2::views::` throughout ✓
 
 - [x] **Step 2 — Add `mpi_span` / `mpi_span_v`** (`include/mpi/mpi_span.hpp`) ✓
 
@@ -146,7 +140,7 @@ include/
 
   Done. All collectives and p2p files are split; core halves live in `include/mpi/`.
   Infrastructure files placed as follows (final names differ from plan):
-  - `ranges/concepts.hpp` + `ranges/ranges.hpp` → `include/mpi/buffer.hpp` (merged)
+  - `ranges/` concepts + accessor dispatch → `include/mpi/buffer.hpp` (merged)
   - `native_handle.hpp` → `include/mpi/handle.hpp`
   - `error_handling.hpp` → `include/mpi/error.hpp`
   - CMakeLists updated to add `include/mpi` to include path.
