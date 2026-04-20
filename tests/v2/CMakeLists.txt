@@ -3,6 +3,12 @@ kamping_register_test(test_v2_auto_counts_view FILES auto_counts_view_test.cpp)
 kamping_register_test(test_v2_sentinels FILES sentinels_test.cpp)
 
 kamping_register_mpi_test(
+    test_v2_type_pool
+    FILES v2_type_pool_test.cpp
+    CORES 1 2
+)
+
+kamping_register_mpi_test(
     test_v2_allgatherv
     FILES v2_allgatherv_test.cpp
     CORES 1 2 4
