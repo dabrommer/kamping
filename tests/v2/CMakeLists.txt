@@ -67,3 +67,9 @@ kamping_register_mpi_test(
     FILES request_view_test.cpp
     CORES 1 2
 )
+
+kamping_register_mpi_test(
+    test_v2_info
+    FILES info_test.cpp
+    CORES 1
+)

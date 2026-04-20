@@ -4,15 +4,18 @@
 
 ### Info object (`include/mpi/info.hpp`)
 
-- [ ] **`mpi::experimental::info`** — owning RAII wrapper for `MPI_Info`.
-  Draft exists in PR #784 (v1 `kamping::Info`); adapt to `mpi::experimental::` with these fixes:
-  - Fix move assignment return type (`Info&`, not `Info` by value)
-  - Fix `get_nth_key`: null-terminate / truncate the returned string at the first `\0`
-  - Promote `KeyValueIterator` to a proper forward iterator (add `operator==`, value semantics)
-  - Expose `mpi_handle() const → MPI_Info` so the native-handle bridge picks it up automatically
-  - Keep `info_value_traits<T>` extensible traits for type-safe `set<T>` / `get<T>`
+- [x] **`mpi::experimental::info`** — owning RAII wrapper for `MPI_Info`.
+  Adapted from PR #784 (v1 `kamping::Info`) with these fixes applied:
+  - Move assignment returns `info&` (not `Info` by value)
+  - `nth_key`: uses `char[MPI_MAX_INFO_KEY+1]` buffer; `std::string(buf)` truncates at first `\0`
+  - Iterator replaced with C++20 sentinel design: `entry_iterator` (stores `_info + _idx`) +
+    `entry_sentinel` (stores `nkeys`); `operator==` is a single comparison; `entries()` returns
+    `std::ranges::subrange<entry_iterator, entry_sentinel>` for range-algorithm compatibility
+  - `mpi_handle() const → MPI_Info` exposed; `MPI_Info` added to `builtin_handle` concept
+  - `info_value_traits<T>` with built-in specializations for `std::string`, `bool`, and
+    all non-bool integral types (C++20 requires-clause instead of enable_if SFINAE)
 
-- [ ] **`mpi::experimental::info_view`** — non-owning wrapper (mirrors `comm_view`); wraps
+- [x] **`mpi::experimental::info_view`** — non-owning wrapper (mirrors `comm_view`); wraps
   an existing `MPI_Info` without freeing it. Used when passing `MPI_INFO_NULL` or a borrowed handle.
 
 - [x] **`ThreadLevel` enum** (`include/mpi/thread_level.hpp`) — `mpi::experimental::ThreadLevel`
