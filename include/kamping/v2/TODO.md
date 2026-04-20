@@ -69,10 +69,39 @@
 
 - [ ] **`v2::psets` namespace** — port `psets::world` / `psets::self` constants from PR #772.
 
-- [ ] **`Group` at `mpi::experimental::` layer** — `group_view` (non-owning) + `group` (owning).
-  `group::as_comm(tag, info)` → `v2::comm` via `MPI_Comm_create_from_group`.
-  `group_view` exposes read-only accessors (size, rank, compare); `group` adds `as_comm`.
-  Wraps the forward-declaration trick from PR #772 in a cleaner two-file split.
+- [ ] **`Group` at `mpi::experimental::` layer** (`include/mpi/group.hpp`) —
+  `group_view` (non-owning) + `group` (owning, move-only).
+  `MPI_Group` added to `builtin_handle` in `handle.hpp`.
+
+  **`GroupEquality` enum** — `Identical` / `Similar` / `Unequal` (no ordering, no spaceship).
+
+  **`group_accessors<Derived>` CRTP mixin** (shared by `group` and `group_view`):
+  - `size() → int`
+  - `rank() → std::optional<int>` — `nullopt` when calling process is not in the group
+    (MPI returns `MPI_UNDEFINED`; v1 exposed the magic value, v2 uses `optional`)
+  - `contains_self() → bool` — convenience over `rank().has_value()`
+  - `compare(group_view) → GroupEquality`
+  - `translate_rank(int, group_view) → std::optional<int>` — `nullopt` for non-members
+  - `translate_ranks(range<int>, group_view) → std::vector<int>` — `MPI_UNDEFINED` for
+    non-members; C++20 range input replaces v1's static_asserted iterator pair
+  - Set algebra (all return owning `group`):
+    - `intersection(group_view) → group`
+    - `difference(group_view) → group`
+    - `set_union(group_view) → group`
+  - Subgroup by rank selection (missing from v1):
+    - `include(range<int>) → group` — `MPI_Group_incl`; keeps only the listed ranks
+    - `exclude(range<int>) → group` — `MPI_Group_excl`; removes the listed ranks
+    - `include_ranges(range<rank_range>) → group` — `MPI_Group_range_incl`
+    - `exclude_ranges(range<rank_range>) → group` — `MPI_Group_range_excl`
+    - `struct rank_range { int first, last, stride = 1; }` replaces raw `int[][3]`
+  - `native() → MPI_Group`
+
+  **`group`** — owning, move-only; `static group::empty()` for `MPI_GROUP_EMPTY`.
+
+  **Dependency rule — `group.hpp` must not include `comm.hpp` or `session.hpp`.**
+  Group creation from those types is exposed as methods on the other side:
+  - `comm_view::group() → group` (`MPI_Comm_group`) — in `comm.hpp`
+  - `session::group_from_pset(pset) → group` (`MPI_Group_from_session_pset`) — in `session.hpp`
 
 ## Handle types
 
