@@ -8,6 +8,6 @@ target_compile_options(example_v2_collectives PRIVATE ${KAMPING_WARNING_FLAGS})
 
 if (TARGET Kokkos::kokkos)
     add_executable(example_v2_kokkos_send_recv kokkos_send_recv_example.cpp)
-    target_link_libraries(example_v2_kokkos_send_recv PRIVATE kamping Kokkos::kokkos)
+    target_link_libraries(example_v2_kokkos_send_recv PRIVATE kamping Kokkos::kokkos KokkosComm::KokkosComm)
     target_compile_options(example_v2_kokkos_send_recv PRIVATE ${KAMPING_WARNING_FLAGS})
 endif ()

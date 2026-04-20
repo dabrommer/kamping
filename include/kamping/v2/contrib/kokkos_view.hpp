@@ -6,9 +6,10 @@
 #include <type_traits>
 #include <utility>
 
+#include <KokkosComm/concepts.hpp>
+#include <KokkosComm/impl/contiguous.hpp>
 #include <Kokkos_Core.hpp>
 
-#include "kamping/builtin_types.hpp"
 #include "kamping/v2/ranges/adaptor_closure.hpp"
 #include "kamping/v2/ranges/concepts.hpp"
 
@@ -17,43 +18,30 @@ namespace kamping::ranges {
 /// Wraps a Kokkos::View and packs it into a contiguous Kokkos::View.
 ///
 /// T is the wrapped Kokkos::View type: a (possibly const) lvalue reference for non-owning
-/// wrappers, or a value type for owning wrappers.
+/// wrappers, or a value type for owning wrappers. If the wrapped Kokkos:View is contiguous this wrapper does nothing
 ///
 /// Send path: mpi_size()/mpi_data() lazily create a contiguous view and deep_copy() the
 ///            wrapped view into it.
-/// Recv path: set_recv_count(n) only works on resizable Kokkos::views with rank = 1 and size = 0.
-///            in this case the wrapped view will be resized
+/// Recv path: set_recv_count(n) only works if the template parameter is_resizable is set and the wrapped
+///            Kokkos::views has rank = 1
 ///
-template <typename T>
+template <typename T, bool is_resizable = false>
+    requires KokkosComm::KokkosView<std::remove_reference_t<T>>
 class kokkos_view {
     static constexpr bool is_owning = !std::is_lvalue_reference_v<T>;
     using view_type                 = std::remove_reference_t<T>;
 
-    static_assert(Kokkos::is_view<view_type>::value, "kokkos_view requires a Kokkos::View type");
-
     using scalar_type     = std::remove_const_t<typename view_type::value_type>;
     using execution_space = view_type::execution_space;
-    using memory_space    = view_type::memory_space;
     using stored_t        = std::conditional_t<is_owning, view_type, view_type*>;
-
-    // Ensure deep_copy can run in the wrapped view's exec space
-    static_assert(
-        Kokkos::SpaceAccessibility<execution_space, memory_space>::accessible,
-        "kokkos_view requires the execution space to access the wrapped view memory space"
-    );
-    // Ensure the given view is in HostSpace (for now)
-    static_assert(
-        Kokkos::SpaceAccessibility<Kokkos::HostSpace, memory_space>::accessible,
-        "kokkos_view currently host-accessible memory space"
-    );
-
-    using packed_view_t = Kokkos::View<typename view_type::non_const_data_type, Kokkos::LayoutRight, memory_space>;
+    using packed_view_t   = KokkosComm::Impl::contiguous_view_t<view_type>;
 
     mutable stored_t      base_;
     mutable packed_view_t packed_storage_;
 
-    mutable bool packed_       = false;
-    mutable bool needs_unpack_ = false;
+    mutable bool packed_        = false;
+    mutable bool needs_unpack_  = false;
+    bool         is_contiguous_ = false;
 
     view_type& base_ref() const noexcept {
         if constexpr (is_owning)
@@ -66,22 +54,21 @@ class kokkos_view {
         execution_space   exec;
         std::string const label = std::string(v.label()) + "-kamping-kokkos-view";
 
-        return [&exec, &v, &label]<std::size_t... Is>(std::index_sequence<Is...>) {
-            return packed_view_t(
-                Kokkos::view_alloc(exec, Kokkos::WithoutInitializing, label),
-                static_cast<typename packed_view_t::size_type>(v.extent(Is))...
-            );
-        }(std::make_index_sequence<view_type::rank>{});
+        return KokkosComm::Impl::allocate_contiguous_for(exec, label, v);
     }
 
-    void pack() const {
+    void pack() const
+        requires requires(view_type from, packed_view_t to) { Kokkos::deep_copy(to, from); }
+    {
         packed_storage_ = make_packed(base_ref());
         Kokkos::deep_copy(packed_storage_, base_ref());
         packed_       = true;
         needs_unpack_ = true;
     }
 
-    void unpack() const {
+    void unpack() const
+        requires requires(view_type to, packed_view_t from) { Kokkos::deep_copy(to, from); }
+    {
         Kokkos::deep_copy(base_ref(), packed_storage_);
         needs_unpack_ = false;
     }
@@ -89,20 +76,22 @@ class kokkos_view {
 public:
     explicit kokkos_view(view_type& view)
         requires(!is_owning)
-        : base_(&view) {}
+        : base_(&view),
+          is_contiguous_(view.span_is_contiguous()) {}
 
     explicit kokkos_view(view_type&& view)
         requires(is_owning)
-        : base_(std::move(view)) {}
+        : base_(std::move(view)),
+          is_contiguous_(view.span_is_contiguous()) {}
 
     view_type& operator*() {
-        if (needs_unpack_)
+        if (!is_contiguous_ && needs_unpack_)
             unpack();
         return base_ref();
     }
 
     view_type const& operator*() const {
-        if (needs_unpack_)
+        if (!is_contiguous_ && needs_unpack_)
             unpack();
         return base_ref();
     }
@@ -116,7 +105,8 @@ public:
 
     void set_recv_count(std::ptrdiff_t n)
         requires(
-            view_type::rank == 1 && requires(view_type& v, typename view_type::size_type m) { Kokkos::resize(v, m); }
+            is_resizable && view_type::rank == 1
+            && requires(view_type& v, typename view_type::size_type m) { Kokkos::resize(v, m); }
         )
     {
         auto const current_size = static_cast<std::ptrdiff_t>(base_ref().size());
@@ -135,13 +125,16 @@ public:
         return static_cast<std::ptrdiff_t>(base_ref().size());
     }
 
-    MPI_Datatype mpi_type()
+    MPI_Datatype mpi_type() const
         requires has_mpi_type<std::span<scalar_type>>
     {
-        return kamping::ranges::type(std::span{packed_storage_.data(), packed_storage_.size()});
+        return kamping::ranges::type(std::span{base_ref().data(), base_ref().size()});
     }
 
     void* mpi_data() const {
+        if (is_contiguous_) {
+            return base_ref().data();
+        }
         if (!needs_unpack_ && !packed_)
             pack();
         return packed_storage_.data();
@@ -167,16 +160,16 @@ inline constexpr struct kokkos_fn : kamping::ranges::adaptor_closure<kokkos_fn> 
 
 /// Returns an owning rank-1 kokkos_view for receive with a custom label.
 template <typename T>
-auto unpack(std::string const& label) {
+auto auto_kokkos_view(std::string const& label) {
     using view_t = Kokkos::View<T*, Kokkos::LayoutRight, Kokkos::HostSpace>;
-    return kamping::ranges::kokkos_view<view_t>(view_t(label, 0));
+    return kamping::ranges::kokkos_view<view_t, true>(view_t(label, 0));
 }
 
 /// Returns an owning rank-1 kokkos_view for receive
 /// Template parameter is the element type, e.g. unpack<int>()
 template <typename T>
-auto unpack() {
-    return unpack<T>("kamping-kokkos-unpack");
+auto auto_kokkos_view() {
+    return auto_kokkos_view<T>("kamping-auto-kokkos-view");
 }
 
 } // namespace kamping::views

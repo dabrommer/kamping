@@ -17,7 +17,7 @@ struct kamping::bridge::native_handle_traits<kamping::Communicator<>> {
 };
 
 int main(int argc, char* argv[]) {
-    kamping::Environment<> env;
+    kamping::Environment<>  env;
     kamping::Communicator<> comm;
     Kokkos::initialize(argc, argv);
 
@@ -38,8 +38,8 @@ int main(int argc, char* argv[]) {
 
     } else if (comm.rank() == 1) {
         matrix_t matrix("recv_matrix", 4, 5);
-        auto row = Kokkos::subview(matrix, 2, Kokkos::ALL());
-        auto& received = *(kamping::v2::recv(row | kamping::views::kokkos, 0, 0, comm));
+        auto     row      = Kokkos::subview(matrix, 2, Kokkos::ALL());
+        auto&    received = *(kamping::v2::recv(row | kamping::views::kokkos, 0, 0, comm));
         std::print("rank {} received row = [", comm.rank());
         for (std::size_t j = 0; j < received.extent(0); ++j) {
             std::print("{}{}", received(j), (j + 1 < received.extent(0)) ? ", " : "");
@@ -55,8 +55,8 @@ int main(int argc, char* argv[]) {
         }
         kamping::v2::send(v | kamping::views::kokkos, 1, 0, comm);
     } else if (comm.rank() == 1) {
-        auto received = kamping::v2::recv(kamping::views::unpack<int>(), 0, 0, comm);
-        auto& data    = *received;
+        auto  received = kamping::v2::recv(kamping::views::auto_kokkos_view<int>(), 0, 0, comm);
+        auto& data     = *received;
         std::print("rank {} unpack recv = [", comm.rank());
         for (std::size_t i = 0; i < data.extent(0); ++i) {
             std::print("{}{}", data(i), (i + 1 < data.extent(0)) ? ", " : "");
@@ -75,8 +75,8 @@ int main(int argc, char* argv[]) {
         kamping::v2::send(matrix | kamping::views::kokkos, 1, 0, comm);
 
     } else if (comm.rank() == 1) {
-        auto received = kamping::v2::recv(kamping::views::unpack<int>(), 0, 0, comm);
-        auto& data    = *received;
+        auto  received = kamping::v2::recv(kamping::views::auto_kokkos_view<int>(), 0, 0, comm);
+        auto& data     = *received;
         std::print("rank {} unpack recv = [", comm.rank());
         for (std::size_t i = 0; i < data.extent(0); ++i) {
             std::print("{}{}", data(i), (i + 1 < data.extent(0)) ? ", " : "");
