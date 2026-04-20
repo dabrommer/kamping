@@ -1,6 +1,6 @@
 // This file is part of KaMPIng.
 //
-// Copyright 2025 The KaMPIng Authors
+// Copyright 2023 The KaMPIng Authors
 //
 // KaMPIng is free software : you can redistribute it and/or modify it under the terms of the GNU Lesser General Public
 // License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later
@@ -18,27 +18,32 @@
 #include <mpi.h>
 
 #include "helpers_for_examples.hpp"
+#include "kamping/checking_casts.hpp"
 #include "kamping/collectives/allgather.hpp"
-#include "kamping/collectives/barrier.hpp"
 #include "kamping/communicator.hpp"
-#include "kamping/data_buffers/empty_db.hpp"
+#include "kamping/data_buffer.hpp"
 #include "kamping/environment.hpp"
+#include "kamping/named_parameters.hpp"
 
 int main() {
     using namespace kamping;
     kamping::Environment  e;
     kamping::Communicator comm;
+    std::vector<int>      input(comm.size(), comm.rank_signed());
 
-    {
-        size_t           size = comm.size() + 10;
-        std::vector<int> sbuf(size, comm.rank_signed() + 5);
-        auto             rbuf = EmptyDataBuffer<int>();
-        auto [sent, received] = comm.allgather(sbuf, rbuf);
+    { // Basic form: Provide a send buffer and let KaMPIng allocate the receive buffer.
+        auto output = comm.allgather(send_buf(input));
+        print_result_on_root(output, comm);
+    }
 
-        if (comm.rank() == 0) {
-            for (auto x: received) {
-                print_on_root(std::to_string(x), comm);
-            }
-        }
+    print_on_root("------", comm);
+
+    { // We can also send only parts of the input and specify an explicit receive buffer.
+        std::vector<int> output;
+
+        // this can also be achieved with `kamping::Span`
+        comm.allgather(send_buf(Span(input.begin(), 2)), recv_buf<resize_to_fit>(output));
+        print_result_on_root(output, comm);
+        return 0;
     }
 }

@@ -7,11 +7,11 @@
 
 #include <mpi.h>
 
-#include "kamping/v2/error_handling.hpp"
-#include "kamping/v2/native_handle.hpp"
-#include "kamping/v2/ranges/all.hpp"
-#include "kamping/v2/ranges/concepts.hpp"
 #include "kamping/v2/result.hpp"
+#include "kamping/v2/views/all.hpp"
+#include "kamping/v2/views/concepts.hpp"
+#include "mpi/handle.hpp"
+#include "mpi/request.hpp"
 
 namespace kamping::v2 {
 
@@ -21,27 +21,19 @@ namespace detail {
 ///
 /// Owns the MPI_Request, enforces move-only semantics, and provides:
 ///   - mpi_native_handle_ptr() for the MPI call site to fill in the request.
-///   - do_wait() / do_test() — thin wrappers that call MPI_Wait/Test and throw
+///   - do_wait() / do_test() — thin wrappers that delegate to request_view and throw
 ///     on error, so the derived wait()/test() methods only handle return values.
 class iresult_base {
 protected:
     MPI_Request request_ = MPI_REQUEST_NULL;
 
     void do_wait(MPI_Status* s) {
-        int err = MPI_Wait(&request_, s);
-        if (err != MPI_SUCCESS) {
-            throw core::mpi_error(err);
-        }
+        mpi::experimental::request_view{request_}.wait(s);
     }
 
     /// Returns true when the operation has completed.
     bool do_test(MPI_Status* s) {
-        int flag;
-        int err = MPI_Test(&request_, &flag, s);
-        if (err != MPI_SUCCESS) {
-            throw core::mpi_error(err);
-        }
-        return static_cast<bool>(flag);
+        return mpi::experimental::request_view{request_}.test(s);
     }
 
 public:
@@ -58,7 +50,10 @@ public:
     /// cannot throw.
     ~iresult_base() {
         if (request_ != MPI_REQUEST_NULL) {
-            (void)MPI_Wait(&request_, MPI_STATUS_IGNORE);
+            try {
+                mpi::experimental::request_view{request_}.wait();
+            } catch (...) {
+            }
         }
     }
 
@@ -89,7 +84,7 @@ class iresult;
 /// address is unchanged) and copies the MPI_Request handle.
 template <typename Buf>
 class iresult<Buf> : public detail::iresult_base {
-    using view_t = ranges::all_t<Buf>;
+    using view_t = kamping::v2::all_t<Buf>;
 
     std::unique_ptr<view_t> view_;
 
@@ -100,7 +95,7 @@ class iresult<Buf> : public detail::iresult_base {
     decltype(auto) extract_buf() {
         if constexpr (std::is_lvalue_reference_v<Buf>) {
             return view_->base();
-        } else if constexpr (std::derived_from<std::remove_cvref_t<Buf>, ranges::view_interface_base>) {
+        } else if constexpr (std::derived_from<std::remove_cvref_t<Buf>, kamping::v2::view_interface_base>) {
             return std::move(*view_);
         } else {
             return std::move(*view_).base();
@@ -108,8 +103,7 @@ class iresult<Buf> : public detail::iresult_base {
     }
 
 public:
-    explicit iresult(Buf&& buf)
-        : view_(std::make_unique<view_t>(ranges::all(std::forward<Buf>(buf)))) {}
+    explicit iresult(Buf&& buf) : view_(std::make_unique<view_t>(kamping::v2::all(std::forward<Buf>(buf)))) {}
 
     view_t& view() {
         return *view_;
@@ -125,9 +119,9 @@ public:
     ///   owned  (owning_view<T>): moves value out — iresult is left in moved-from state.
     ///   borrowed (ref_view<T>):  returns lvalue reference to the external buffer.
     ///   view pass-through:       moves the view out.
-    template <bridge::convertible_to_mpi_handle_ptr<MPI_Status> Status = MPI_Status*>
+    template <mpi::experimental::convertible_to_mpi_handle_ptr<MPI_Status> Status = MPI_Status*>
     decltype(auto) wait(Status&& status = MPI_STATUS_IGNORE) {
-        do_wait(kamping::bridge::native_handle_ptr(status));
+        do_wait(mpi::experimental::handle_ptr(status));
         return extract_buf();
     }
 
@@ -136,10 +130,10 @@ public:
     ///   owned (owning_view<T> or non-borrowed view): returns optional<T> / optional<View>.
     ///     Some on completion — buffer moved out, iresult spent.
     ///     nullopt on pending — iresult remains valid for retry or wait().
-    template <bridge::convertible_to_mpi_handle_ptr<MPI_Status> Status = MPI_Status*>
+    template <mpi::experimental::convertible_to_mpi_handle_ptr<MPI_Status> Status = MPI_Status*>
     auto test(Status&& status = MPI_STATUS_IGNORE) {
-        bool const done = do_test(kamping::bridge::native_handle_ptr(status));
-        if constexpr (ranges::borrowed_buffer<view_t>) {
+        bool const done = do_test(mpi::experimental::handle_ptr(status));
+        if constexpr (kamping::v2::borrowed_buffer<view_t>) {
             return done;
         } else {
             using value_t = std::remove_reference_t<decltype(extract_buf())>;
@@ -163,8 +157,11 @@ class iresult<SBuf, RBuf> : public detail::iresult_base {
 
 public:
     explicit iresult(SBuf&& sbuf, RBuf&& rbuf)
-        : result_(std::make_unique<result<SBuf, RBuf>>(
-              result<SBuf, RBuf>{std::forward<SBuf>(sbuf), std::forward<RBuf>(rbuf)})) {}
+        : result_(
+              std::make_unique<result<SBuf, RBuf>>(
+                  result<SBuf, RBuf>{std::forward<SBuf>(sbuf), std::forward<RBuf>(rbuf)}
+              )
+          ) {}
 
     // ── Buffer access ─────────────────────────────────────────────────────────
 
@@ -179,18 +176,18 @@ public:
 
     /// Blocks until complete, then returns the result.
     /// Owned members are moved out; borrowed members copy their reference binding (no data copy).
-    template <bridge::convertible_to_mpi_handle_ptr<MPI_Status> Status = MPI_Status*>
+    template <mpi::experimental::convertible_to_mpi_handle_ptr<MPI_Status> Status = MPI_Status*>
     result<SBuf, RBuf> wait(Status&& status = MPI_STATUS_IGNORE) {
-        do_wait(kamping::bridge::native_handle_ptr(status));
+        do_wait(mpi::experimental::handle_ptr(status));
         return std::move(*result_);
     }
 
     /// Non-blocking completion check. Always returns optional<result<SBuf, RBuf>>.
     ///   Some: operation complete — owned members moved out, ref bindings copied (no data copy).
     ///   nullopt: pending — iresult remains valid for retry or wait().
-    template <bridge::convertible_to_mpi_handle_ptr<MPI_Status> Status = MPI_Status*>
+    template <mpi::experimental::convertible_to_mpi_handle_ptr<MPI_Status> Status = MPI_Status*>
     std::optional<result<SBuf, RBuf>> test(Status&& status = MPI_STATUS_IGNORE) {
-        if (do_test(kamping::bridge::native_handle_ptr(status)))
+        if (do_test(mpi::experimental::handle_ptr(status)))
             return std::move(*result_);
         return std::nullopt;
     }

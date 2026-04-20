@@ -21,9 +21,6 @@
 
 #include "error_handling.hpp"
 #include "kamping/checking_casts.hpp"
-#include "kamping/comm_helper/generic_helper.hpp"
-#include "kamping/v2/ranges.hpp"
-#include "kamping/data_buffers/data_buffer_concepts.hpp"
 #include "kamping/environment.hpp"
 #include "kamping/group.hpp"
 #include "kamping/kassert/kassert.hpp"
@@ -47,7 +44,8 @@ KAMPING_MAKE_HAS_MEMBER(mpi_error_handler)
 /// call any function of <tt>kamping::Communicator</tt>. See <tt>test/plugin_tests.cpp</tt> for examples.
 template <
     template <typename...> typename DefaultContainerType = std::vector,
-    template <typename, template <typename...> typename> typename... Plugins>
+    template <typename, template <typename...> typename>
+    typename... Plugins>
 class Communicator : public Plugins<Communicator<DefaultContainerType, Plugins...>, DefaultContainerType>... {
 public:
     /// @brief Type of the default container type to use for containers created inside operations of this communicator.
@@ -474,12 +472,6 @@ public:
     template <typename... Args>
     void send(Args... args) const;
 
-    template <kamping::ranges::send_buffer SBuff>
-    SBuff send(SBuff&& sbuf, int dest) const;
-
-    template <kamping::ranges::send_buffer SBuff>
-    SBuff send(SBuff&& sbuf, int dest, int tag) const;
-
     template <typename... Args>
     void bsend(Args... args) const;
 
@@ -510,25 +502,6 @@ public:
     template <typename recv_value_type_tparam = kamping::internal::unused_tparam, typename... Args>
     auto sendrecv(Args... args) const;
 
-    template <SendDataBuffer SBuff, RecvDataBuffer RBuff, typename StatusObject = decltype(status(ignore<>))>
-    auto sendrecv(
-        SBuff&&      sbuf,
-        RBuff&&      rbuf,
-        int          dest,
-        int          send_tag = MPI_UNDEFINED,
-        int          source   = MPI_ANY_SOURCE,
-        int          recv_tag = MPI_ANY_TAG,
-        StatusObject status   = kamping::status(ignore<>)
-    ) const;
-
-    template <kamping::ranges::recv_buffer RBuff, typename StatusObject = decltype(status(ignore<>))>
-    RBuff recv(
-        RBuff&&      rbuf,
-        int          source = MPI_ANY_SOURCE,
-        int          tag    = MPI_ANY_TAG,
-        StatusObject status = kamping::status(ignore<>)
-    ) const;
-
     template <typename recv_value_type_tparam = kamping::internal::unused_tparam, typename... Args>
     auto recv(Args... args) const;
 
@@ -549,13 +522,6 @@ public:
 
     template <typename... Args>
     auto alltoallv(Args... args) const;
-
-    template <SendDataBuffer SBuff, RecvDataBuffer RBuff>
-    auto alltoall(SBuff&& sbuf, RBuff&& rbuf) const;
-
-    template <SendDataBuffer SBuff, RecvDataBuffer RBuff>
-        requires ExtendedDataBuffer<SBuff> && ExtendedDataBuffer<RBuff>
-    auto alltoallv(SBuff&& sbuf, RBuff&& rbuf) const;
 
     template <typename recv_value_type_tparam = kamping::internal::unused_tparam, typename... Args>
     auto scatter(Args... args) const;
@@ -607,9 +573,6 @@ public:
 
     template <typename... Args>
     auto gatherv(Args... args) const;
-
-    template <SendDataBuffer SBuff, RecvDataBuffer RBuff>
-    auto allgather(SBuff&& sbuf, RBuff&& rbuf) const;
 
     template <typename... Args>
     auto allgather(Args... args) const;
@@ -664,8 +627,10 @@ private:
 
     /// See \ref mpi_error_hook
     template <
-        template <typename, template <typename...> typename> typename Plugin,
-        template <typename, template <typename...> typename> typename... RemainingPlugins>
+        template <typename, template <typename...> typename>
+        typename Plugin,
+        template <typename, template <typename...> typename>
+        typename... RemainingPlugins>
     void mpi_error_hook_impl(int const error_code, std::string const& callee) const {
         using PluginType = Plugin<Communicator<DefaultContainerType, Plugins...>, DefaultContainerType>;
         if constexpr (has_member_mpi_error_handler_v<PluginType, int, std::string const&>) {

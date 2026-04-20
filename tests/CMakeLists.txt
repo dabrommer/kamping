@@ -318,6 +318,8 @@ kamping_register_mpi_test(
     CORES 1 4
 )
 
+add_subdirectory(v2)
+
 # Tests using C++ 20
 kamping_register_mpi_test(
     test_std_span_alltoallv_cpp20

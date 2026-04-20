@@ -20,20 +20,26 @@ struct result {
 
     template <std::size_t I>
     decltype(auto) get() & {
-        if constexpr (I == 0) return (send);
-        else return (recv);
+        if constexpr (I == 0)
+            return (send);
+        else
+            return (recv);
     }
 
     template <std::size_t I>
     decltype(auto) get() && {
-        if constexpr (I == 0) return std::forward<SBuf>(send);
-        else return std::forward<RBuf>(recv);
+        if constexpr (I == 0)
+            return std::forward<SBuf>(send);
+        else
+            return std::forward<RBuf>(recv);
     }
 
     template <std::size_t I>
     decltype(auto) get() const& {
-        if constexpr (I == 0) return (send);
-        else return (recv);
+        if constexpr (I == 0)
+            return (send);
+        else
+            return (recv);
     }
 };
 

@@ -125,7 +125,7 @@ int main() {
         }
     }
     // std::views::take: a standard library view that is not derived from view_interface_base.
-    // kamping::ranges::size/data/type dispatch through the std::ranges CPOs via the
+    // mpi::experimental::size/data/type dispatch through the std::ranges CPOs via the
     // sized_range/contiguous_range fallback overloads — no kamping wrapping needed.
     {
         if (comm.rank_signed() == 0) {
@@ -166,7 +166,7 @@ int main() {
         if (comm.rank_signed() == 0) {
             single_buffer buf{{42, 42.42}};
             auto          view = buf | kamping::views::with_type(example_type());
-            static_assert(kamping::ranges::data_buffer<decltype(view)>);
+            static_assert(mpi::experimental::data_buffer<decltype(view)>);
             // comm.send(view, 1);
         }
     }
@@ -196,7 +196,7 @@ int main() {
         if (comm.rank_signed() == 0) {
             data_only_buffer buf{{42, 42.42}};
             auto             view = buf | as_single_struct;
-            static_assert(kamping::ranges::data_buffer<decltype(view)>);
+            static_assert(mpi::experimental::data_buffer<decltype(view)>);
             // comm.send(view, 1);
         }
     }
