@@ -1,5 +1,127 @@
 # v2 TODO
 
+## Cross-cutting: error handling (`std::expected`)
+
+Tracked in issue #781.
+
+### Context
+
+`mpi::experimental::` wrappers always throw `mpi_error` on failure. This is correct for
+programs that use the default `MPI_ERRORS_ARE_FATAL` error handler. Non-throwing error
+handling matters primarily for **ULFM** (User-Level Failure Mitigation) where process
+failures are expected and handled rather than fatal.
+
+### The owned-buffer problem
+
+When a user moves a buffer into an operation and the MPI call fails, the buffer has been
+consumed by the call site but the data was not sent. The error return must carry the buffer
+back so the caller can inspect or retry:
+
+```cpp
+// Without nothrow: buffer is gone if send throws
+v2::send(std::move(vec), dest, comm);
+
+// With nothrow: buffer is returned alongside the error so the caller can recover
+auto result = v2::try_send(std::move(vec), dest, comm);
+// result.error() carries both mpi_error and the buffer on failure
+// result.value() carries the buffer on success (so it can be reused)
+```
+
+This means the error type is not a plain `mpi_error` — it must bundle the owned buffers.
+
+### API shape
+
+**Tag dispatch (preferred over suffix naming):**
+```cpp
+v2::send(buf, dest, comm);                   // throws on error
+v2::send(buf, dest, comm, kamping::v2::nothrow); // returns std::expected
+```
+Mirrors `std::nothrow_t` / `std::allocator` convention. Same function name, overload on the
+trailing tag. Avoids a proliferation of `try_*` names while keeping call sites readable.
+
+**Return type when owned buffers are present:**
+
+`std::expected<T, E>` requires T *or* E — not both. Since we always return the buffer
+(success or failure), we need a custom error type:
+
+```cpp
+template <typename... OwnedBufs>
+struct mpi_error_with_bufs {
+    mpi_error          error;
+    std::tuple<OwnedBufs...> bufs;   // buffers returned on failure so callers can recover
+};
+
+// send with owned sbuf:
+std::expected<SBuf, mpi_error_with_bufs<SBuf>>
+// allreduce with owned sbuf + rbuf:
+std::expected<RBuf, mpi_error_with_bufs<SBuf, RBuf>>
+// recv with no owned sbuf, owned rbuf:
+std::expected<RBuf, mpi_error_with_bufs<RBuf>>
+```
+
+If no buffer is owned (all borrows), the error type reduces to plain `mpi_error`:
+```cpp
+std::expected<void, mpi_error>
+```
+
+**For non-blocking:** `iresult::try_wait()` → `std::expected<T, mpi_error_with_bufs<...>>`
+is the primary first target since ULFM use cases most often deal with in-flight requests.
+
+### Implementation notes
+
+- `mpi::experimental::` layer: always throws. It is minimal wiring, not a user API.
+  Non-throwing paths live only in `kamping::v2::`.
+- The `nothrow` overloads call `mpi::experimental::` inside a `try/catch`, extract the
+  buffer from the view chain before rethrowing, and pack both into the expected error.
+- Both send and recv owned buffers are returned in the error case. Recv buffer contents
+  may be garbage (partial write), but returning it avoids a memory leak and lets the
+  caller decide whether to inspect or discard it.
+- **Defer until ULFM work begins.** Record the design now; implement when needed.
+
+---
+
+## Cross-cutting: large element counts (MPI-4 `_c` variants)
+
+Tracked in issue #113.
+
+### Context
+
+MPI-4 added `_c`-suffixed variants (`MPI_Send_c`, `MPI_Allreduce_c`, …) that accept
+`MPI_Count` (64-bit signed) instead of `int` for element counts. Required for buffers
+with more than 2^31 elements. MPI-3 and earlier are limited to `int` counts.
+
+### Decision
+
+**Accessor API is unchanged.** `count()` continues to return `std::ptrdiff_t`, which is
+already 64-bit on all targets v2 supports. The 32-bit limitation lives only at the MPI
+call site, not in the buffer protocol.
+
+**In `mpi::experimental::` wrappers**, dispatch at compile time on MPI version:
+
+```cpp
+#if MPI_VERSION >= 4
+    MPI_Allreduce_c(ptr(sbuf), ptr(rbuf), count(sbuf), type(sbuf), mpi_op, comm);
+#else
+    KASSERT(count(sbuf) <= INT_MAX, "element count exceeds int range; requires MPI-4");
+    MPI_Allreduce(ptr(sbuf), ptr(rbuf), static_cast<int>(count(sbuf)), type(sbuf), mpi_op, comm);
+#endif
+```
+
+The `#if` is compiled away — zero overhead, no runtime branch. On MPI < 4 the `KASSERT`
+fires in debug builds when a count overflows `int` (uses the existing
+`KAMPING_ASSERTION_LEVEL` infrastructure).
+
+**No new CMake option.** MPI version is already detected by `find_package(MPI)`.
+
+**`MPI_Count` vs `std::ptrdiff_t`:** both are 64-bit signed on all common targets;
+`static_cast<MPI_Count>(count(buf))` is always safe. No ABI concern.
+
+**When to implement:** in a single dedicated pass over all wrappers after the wrapper set
+is complete. Adding guards wrapper-by-wrapper risks inconsistency and makes the diff
+harder to review. Open a dedicated issue/PR for the MPI-4 large-count pass.
+
+---
+
 ## Environment / Session
 
 ### Info object (`include/mpi/info.hpp`)
