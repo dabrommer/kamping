@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "kamping/v2/tags.hpp"
+#include "kamping/v2/sentinels.hpp"
 #include "kamping/v2/views/with_size_view.hpp"
 #include "kamping/v2/views/with_type_view.hpp"
 
@@ -42,7 +42,7 @@ TEST(SentinelsTest, BottomData) {
 
 // Composed with with_type + with_size it becomes a full send_buffer
 TEST(SentinelsTest, BottomComposed) {
-    auto buf = v2::bottom | views::with_type(MPI_BYTE) | views::with_size(4);
+    auto buf = v2::bottom | v2::views::with_type(MPI_BYTE) | v2::views::with_size(4);
     static_assert(mpi::experimental::send_buffer<decltype(buf)>);
     EXPECT_EQ(mpi::experimental::ptr(buf), MPI_BOTTOM);
     EXPECT_EQ(mpi::experimental::type(buf), MPI_BYTE);

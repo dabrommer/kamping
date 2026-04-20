@@ -6,7 +6,7 @@
 
 #include "kamping/v2/views/view_interface.hpp"
 
-namespace kamping::ranges {
+namespace kamping::v2 {
 
 /// Non-owning view over an lvalue. T is unconstrained — supports both ranges and
 /// non-range buffer types (e.g. a struct with mpi_ptr()/mpi_count() but no begin()/end()).
@@ -31,17 +31,22 @@ class owning_view : public view_interface<owning_view<T>> {
     T r_;
 
 public:
-    constexpr explicit owning_view(T&& r) noexcept(std::is_nothrow_move_constructible_v<T>)
-        : r_(std::move(r)) {}
+    constexpr explicit owning_view(T&& r) noexcept(std::is_nothrow_move_constructible_v<T>) : r_(std::move(r)) {}
 
     owning_view(owning_view const&)            = delete;
     owning_view& operator=(owning_view const&) = delete;
     owning_view(owning_view&&)                 = default;
     owning_view& operator=(owning_view&&)      = default;
 
-    constexpr T&       base() &      noexcept { return r_; }
-    constexpr T const& base() const& noexcept { return r_; }
-    constexpr T&&      base() &&     noexcept { return std::move(r_); }
+    constexpr T& base() & noexcept {
+        return r_;
+    }
+    constexpr T const& base() const& noexcept {
+        return r_;
+    }
+    constexpr T&& base() && noexcept {
+        return std::move(r_);
+    }
 };
 
 /// Wraps a value in the appropriate view, mirroring std::views::all extended for kamping:
@@ -82,4 +87,4 @@ using all_t = decltype(all(std::declval<R>()));
 template <typename T>
 inline constexpr bool enable_borrowed_buffer<ref_view<T>> = true;
 
-} // namespace kamping::ranges
+} // namespace kamping::v2

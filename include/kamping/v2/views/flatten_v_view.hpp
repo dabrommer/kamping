@@ -7,15 +7,12 @@
 #include <span>
 #include <vector>
 
-#include "kamping/v2/ranges/concepts.hpp"
-#include "kamping/v2/ranges/ranges.hpp"
-#include "kamping/v2/tags.hpp"
 #include "kamping/v2/views/adaptor.hpp"
 #include "kamping/v2/views/all.hpp"
+#include "kamping/v2/views/concepts.hpp"
 #include "kamping/v2/views/view_interface.hpp"
 
-namespace kamping {
-namespace ranges {
+namespace kamping::v2 {
 
 /// Flattens a range-of-ranges into a contiguous MPI buffer with per-rank counts
 /// and displacements.
@@ -73,7 +70,7 @@ class flatten_v_view
 
         // Resize and fill counts
         if constexpr (resize_counts) {
-            kamping::ranges::resize_for_receive(counts_, static_cast<std::ptrdiff_t>(num_ranks));
+            kamping::v2::resize_for_receive(counts_, static_cast<std::ptrdiff_t>(num_ranks));
         }
         auto*          counts_ptr = std::ranges::data(counts_);
         std::ptrdiff_t total_size = 0;
@@ -86,13 +83,13 @@ class flatten_v_view
 
         // Resize and compute displacements
         if constexpr (resize_displs) {
-            kamping::ranges::resize_for_receive(displs_, static_cast<std::ptrdiff_t>(num_ranks));
+            kamping::v2::resize_for_receive(displs_, static_cast<std::ptrdiff_t>(num_ranks));
         }
         std::exclusive_scan(counts_ptr, counts_ptr + num_ranks, std::ranges::data(displs_), 0);
 
         // Resize and copy data into flat buffer
         if constexpr (resize_buf) {
-            kamping::ranges::resize_for_receive(flat_buf_, total_size);
+            kamping::v2::resize_for_receive(flat_buf_, total_size);
         }
         using elem_t = std::ranges::range_value_t<std::ranges::range_value_t<Source>>;
         elem_t* dest = std::ranges::data(flat_buf_);
@@ -117,10 +114,10 @@ public:
 
     template <typename S, typename F, typename C, typename D>
     flatten_v_view(S&& source, F&& flat_buf, C&& counts, D&& displs)
-        : source_(kamping::ranges::all(std::forward<S>(source))),
-          flat_buf_(kamping::ranges::all(std::forward<F>(flat_buf))),
-          counts_(kamping::ranges::all(std::forward<C>(counts))),
-          displs_(kamping::ranges::all(std::forward<D>(displs))) {}
+        : source_(kamping::v2::all(std::forward<S>(source))),
+          flat_buf_(kamping::v2::all(std::forward<F>(flat_buf))),
+          counts_(kamping::v2::all(std::forward<C>(counts))),
+          displs_(kamping::v2::all(std::forward<D>(displs))) {}
 
     std::span<int const> mpi_counts() const {
         ensure_flattened();
@@ -159,19 +156,16 @@ public:
 };
 
 template <typename S, typename F, typename C, typename D>
-flatten_v_view(S&&, F&&, C&&, D&&) -> flatten_v_view<
-    kamping::ranges::all_t<S>,
-    kamping::ranges::all_t<F>,
-    kamping::ranges::all_t<C>,
-    kamping::ranges::all_t<D>>;
+flatten_v_view(S&&, F&&, C&&, D&&)
+    -> flatten_v_view<kamping::v2::all_t<S>, kamping::v2::all_t<F>, kamping::v2::all_t<C>, kamping::v2::all_t<D>>;
 
 template <typename Source, typename FlatBuf, typename Counts, typename Displs, bool rb, bool rc, bool rd>
 inline constexpr bool enable_borrowed_buffer<flatten_v_view<Source, FlatBuf, Counts, Displs, rb, rc, rd>> =
     enable_borrowed_buffer<FlatBuf> && enable_borrowed_buffer<Counts> && enable_borrowed_buffer<Displs>;
 
-} // namespace ranges
+} // namespace kamping::v2
 
-namespace views {
+namespace kamping::v2::views {
 
 /// 0-arg: allocate flat buffer, counts, and displs internally — all auto-resized.
 /// FlatTemplate/CountsContainer/DisplsContainer select the internal container types:
@@ -182,136 +176,122 @@ template <
     typename CountsContainer                     = std::vector<int>,
     typename DisplsContainer                     = std::vector<int>>
 constexpr auto flatten_v() {
-    return kamping::ranges::adaptor<0, decltype([](auto&& source) {
-                                        using Source  = std::remove_cvref_t<decltype(source)>;
-                                        using inner_t = std::ranges::range_value_t<Source>;
-                                        using elem_t  = std::ranges::range_value_t<inner_t>;
-                                        using S       = kamping::ranges::all_t<decltype(source)>;
-                                        using F       = kamping::ranges::owning_view<FlatTemplate<elem_t>>;
-                                        using C       = kamping::ranges::owning_view<CountsContainer>;
-                                        using D       = kamping::ranges::owning_view<DisplsContainer>;
-                                        return kamping::ranges::flatten_v_view<S, F, C, D, true, true, true>(
-                                            std::forward<decltype(source)>(source),
-                                            FlatTemplate<elem_t>{},
-                                            CountsContainer{},
-                                            DisplsContainer{}
-                                        );
-                                    })>{}();
+    return kamping::v2::adaptor<0, decltype([](auto&& source) {
+                                    using Source  = std::remove_cvref_t<decltype(source)>;
+                                    using inner_t = std::ranges::range_value_t<Source>;
+                                    using elem_t  = std::ranges::range_value_t<inner_t>;
+                                    using S       = kamping::v2::all_t<decltype(source)>;
+                                    using F       = kamping::v2::owning_view<FlatTemplate<elem_t>>;
+                                    using C       = kamping::v2::owning_view<CountsContainer>;
+                                    using D       = kamping::v2::owning_view<DisplsContainer>;
+                                    return kamping::v2::flatten_v_view<S, F, C, D, true, true, true>(
+                                        std::forward<decltype(source)>(source),
+                                        FlatTemplate<elem_t>{},
+                                        CountsContainer{},
+                                        DisplsContainer{}
+                                    );
+                                })>{}();
 }
 
 /// 1-arg (non-resize): user flat buffer, internal counts and displs (auto-resized).
-/// CountsContainer/DisplsContainer select the internal container types:
-///   flatten_v<std::deque<int>>(buf)  — custom counts container
 template <typename CountsContainer = std::vector<int>, typename DisplsContainer = std::vector<int>, typename Fb>
     requires(!std::same_as<std::remove_cvref_t<Fb>, kamping::v2::resize_t>)
 constexpr auto flatten_v(Fb&& flat_buf) {
-    return kamping::ranges::adaptor<1, decltype([](auto&& source, auto&& fb) {
-                                        using S = kamping::ranges::all_t<decltype(source)>;
-                                        using F = kamping::ranges::all_t<decltype(fb)>;
-                                        using C = kamping::ranges::owning_view<CountsContainer>;
-                                        using D = kamping::ranges::owning_view<DisplsContainer>;
-                                        return kamping::ranges::flatten_v_view<S, F, C, D, false, true, true>(
-                                            std::forward<decltype(source)>(source),
-                                            std::forward<decltype(fb)>(fb),
-                                            CountsContainer{},
-                                            DisplsContainer{}
-                                        );
-                                    })>{}(std::forward<Fb>(flat_buf));
+    return kamping::v2::adaptor<1, decltype([](auto&& source, auto&& fb) {
+                                    using S = kamping::v2::all_t<decltype(source)>;
+                                    using F = kamping::v2::all_t<decltype(fb)>;
+                                    using C = kamping::v2::owning_view<CountsContainer>;
+                                    using D = kamping::v2::owning_view<DisplsContainer>;
+                                    return kamping::v2::flatten_v_view<S, F, C, D, false, true, true>(
+                                        std::forward<decltype(source)>(source),
+                                        std::forward<decltype(fb)>(fb),
+                                        CountsContainer{},
+                                        DisplsContainer{}
+                                    );
+                                })>{}(std::forward<Fb>(flat_buf));
 }
 
 /// 2-arg (non-resize): user flat buffer + user counts, internal displs (auto-resized).
-/// DisplsContainer selects the internal displs container type.
 template <typename DisplsContainer = std::vector<int>, typename Fb, typename Ct>
     requires(!std::same_as<std::remove_cvref_t<Fb>, kamping::v2::resize_t>)
 constexpr auto flatten_v(Fb&& flat_buf, Ct&& counts) {
-    return kamping::ranges::adaptor<2, decltype([](auto&& source, auto&& fb, auto&& c) {
-                                        using S = kamping::ranges::all_t<decltype(source)>;
-                                        using F = kamping::ranges::all_t<decltype(fb)>;
-                                        using C = kamping::ranges::all_t<decltype(c)>;
-                                        using D = kamping::ranges::owning_view<DisplsContainer>;
-                                        return kamping::ranges::flatten_v_view<S, F, C, D, false, false, true>(
-                                            std::forward<decltype(source)>(source),
-                                            std::forward<decltype(fb)>(fb),
-                                            std::forward<decltype(c)>(c),
-                                            DisplsContainer{}
-                                        );
-                                    })>{}(std::forward<Fb>(flat_buf), std::forward<Ct>(counts));
+    return kamping::v2::adaptor<2, decltype([](auto&& source, auto&& fb, auto&& c) {
+                                    using S = kamping::v2::all_t<decltype(source)>;
+                                    using F = kamping::v2::all_t<decltype(fb)>;
+                                    using C = kamping::v2::all_t<decltype(c)>;
+                                    using D = kamping::v2::owning_view<DisplsContainer>;
+                                    return kamping::v2::flatten_v_view<S, F, C, D, false, false, true>(
+                                        std::forward<decltype(source)>(source),
+                                        std::forward<decltype(fb)>(fb),
+                                        std::forward<decltype(c)>(c),
+                                        DisplsContainer{}
+                                    );
+                                })>{}(std::forward<Fb>(flat_buf), std::forward<Ct>(counts));
 }
 
 /// 3-arg (non-resize): user flat buffer + user counts + user displs — no resize for any.
 template <typename Fb, typename Ct, typename Dt>
     requires(!std::same_as<std::remove_cvref_t<Fb>, kamping::v2::resize_t>)
 constexpr auto flatten_v(Fb&& flat_buf, Ct&& counts, Dt&& displs) {
-    return kamping::ranges::adaptor<3, decltype([](auto&& source, auto&& fb, auto&& c, auto&& d) {
-                                        return kamping::ranges::flatten_v_view(
-                                            std::forward<decltype(source)>(source),
-                                            std::forward<decltype(fb)>(fb),
-                                            std::forward<decltype(c)>(c),
-                                            std::forward<decltype(d)>(d)
-                                        );
-                                    })>{}(
-        std::forward<Fb>(flat_buf),
-        std::forward<Ct>(counts),
-        std::forward<Dt>(displs)
-    );
+    return kamping::v2::adaptor<3, decltype([](auto&& source, auto&& fb, auto&& c, auto&& d) {
+                                    return kamping::v2::flatten_v_view(
+                                        std::forward<decltype(source)>(source),
+                                        std::forward<decltype(fb)>(fb),
+                                        std::forward<decltype(c)>(c),
+                                        std::forward<decltype(d)>(d)
+                                    );
+                                })>{}(std::forward<Fb>(flat_buf), std::forward<Ct>(counts), std::forward<Dt>(displs));
 }
 
 /// 1-arg (resize): user flat buffer with resize, internal counts and displs (auto-resized).
-/// CountsContainer/DisplsContainer select the internal container types.
 template <typename CountsContainer = std::vector<int>, typename DisplsContainer = std::vector<int>, typename Fb>
 constexpr auto flatten_v(kamping::v2::resize_t, Fb&& flat_buf) {
-    return kamping::ranges::adaptor<1, decltype([](auto&& source, auto&& fb) {
-                                        using S = kamping::ranges::all_t<decltype(source)>;
-                                        using F = kamping::ranges::all_t<decltype(fb)>;
-                                        using C = kamping::ranges::owning_view<CountsContainer>;
-                                        using D = kamping::ranges::owning_view<DisplsContainer>;
-                                        return kamping::ranges::flatten_v_view<S, F, C, D, true, true, true>(
-                                            std::forward<decltype(source)>(source),
-                                            std::forward<decltype(fb)>(fb),
-                                            CountsContainer{},
-                                            DisplsContainer{}
-                                        );
-                                    })>{}(std::forward<Fb>(flat_buf));
+    return kamping::v2::adaptor<1, decltype([](auto&& source, auto&& fb) {
+                                    using S = kamping::v2::all_t<decltype(source)>;
+                                    using F = kamping::v2::all_t<decltype(fb)>;
+                                    using C = kamping::v2::owning_view<CountsContainer>;
+                                    using D = kamping::v2::owning_view<DisplsContainer>;
+                                    return kamping::v2::flatten_v_view<S, F, C, D, true, true, true>(
+                                        std::forward<decltype(source)>(source),
+                                        std::forward<decltype(fb)>(fb),
+                                        CountsContainer{},
+                                        DisplsContainer{}
+                                    );
+                                })>{}(std::forward<Fb>(flat_buf));
 }
 
 /// 2-arg (resize): user flat buffer + user counts — both resized, internal displs (auto-resized).
-/// DisplsContainer selects the internal displs container type.
 template <typename DisplsContainer = std::vector<int>, typename Fb, typename Ct>
 constexpr auto flatten_v(kamping::v2::resize_t, Fb&& flat_buf, Ct&& counts) {
-    return kamping::ranges::adaptor<2, decltype([](auto&& source, auto&& fb, auto&& c) {
-                                        using S = kamping::ranges::all_t<decltype(source)>;
-                                        using F = kamping::ranges::all_t<decltype(fb)>;
-                                        using C = kamping::ranges::all_t<decltype(c)>;
-                                        using D = kamping::ranges::owning_view<DisplsContainer>;
-                                        return kamping::ranges::flatten_v_view<S, F, C, D, true, true, true>(
-                                            std::forward<decltype(source)>(source),
-                                            std::forward<decltype(fb)>(fb),
-                                            std::forward<decltype(c)>(c),
-                                            DisplsContainer{}
-                                        );
-                                    })>{}(std::forward<Fb>(flat_buf), std::forward<Ct>(counts));
+    return kamping::v2::adaptor<2, decltype([](auto&& source, auto&& fb, auto&& c) {
+                                    using S = kamping::v2::all_t<decltype(source)>;
+                                    using F = kamping::v2::all_t<decltype(fb)>;
+                                    using C = kamping::v2::all_t<decltype(c)>;
+                                    using D = kamping::v2::owning_view<DisplsContainer>;
+                                    return kamping::v2::flatten_v_view<S, F, C, D, true, true, true>(
+                                        std::forward<decltype(source)>(source),
+                                        std::forward<decltype(fb)>(fb),
+                                        std::forward<decltype(c)>(c),
+                                        DisplsContainer{}
+                                    );
+                                })>{}(std::forward<Fb>(flat_buf), std::forward<Ct>(counts));
 }
 
 /// 3-arg (resize): user flat buffer + user counts + user displs — all resized.
 template <typename Fb, typename Ct, typename Dt>
 constexpr auto flatten_v(kamping::v2::resize_t, Fb&& flat_buf, Ct&& counts, Dt&& displs) {
-    return kamping::ranges::adaptor<3, decltype([](auto&& source, auto&& fb, auto&& c, auto&& d) {
-                                        using S = kamping::ranges::all_t<decltype(source)>;
-                                        using F = kamping::ranges::all_t<decltype(fb)>;
-                                        using C = kamping::ranges::all_t<decltype(c)>;
-                                        using D = kamping::ranges::all_t<decltype(d)>;
-                                        return kamping::ranges::flatten_v_view<S, F, C, D, true, true, true>(
-                                            std::forward<decltype(source)>(source),
-                                            std::forward<decltype(fb)>(fb),
-                                            std::forward<decltype(c)>(c),
-                                            std::forward<decltype(d)>(d)
-                                        );
-                                    })>{}(
-        std::forward<Fb>(flat_buf),
-        std::forward<Ct>(counts),
-        std::forward<Dt>(displs)
-    );
+    return kamping::v2::adaptor<3, decltype([](auto&& source, auto&& fb, auto&& c, auto&& d) {
+                                    using S = kamping::v2::all_t<decltype(source)>;
+                                    using F = kamping::v2::all_t<decltype(fb)>;
+                                    using C = kamping::v2::all_t<decltype(c)>;
+                                    using D = kamping::v2::all_t<decltype(d)>;
+                                    return kamping::v2::flatten_v_view<S, F, C, D, true, true, true>(
+                                        std::forward<decltype(source)>(source),
+                                        std::forward<decltype(fb)>(fb),
+                                        std::forward<decltype(c)>(c),
+                                        std::forward<decltype(d)>(d)
+                                    );
+                                })>{}(std::forward<Fb>(flat_buf), std::forward<Ct>(counts), std::forward<Dt>(displs));
 }
 
-} // namespace views
-} // namespace kamping
+} // namespace kamping::v2::views

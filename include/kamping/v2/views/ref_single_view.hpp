@@ -5,9 +5,9 @@
 #include <ranges>
 #include <type_traits>
 
-#include "kamping/v2/ranges/concepts.hpp"
+#include "kamping/v2/views/concepts.hpp"
 
-namespace kamping::ranges {
+namespace kamping::v2 {
 
 /// Non-owning view over a single element, modeled after std::views::single but
 /// capturing by lvalue reference instead of by value.
@@ -27,27 +27,43 @@ class ref_single_view : public std::ranges::view_interface<ref_single_view<T>> {
 public:
     constexpr explicit ref_single_view(T& val) noexcept : ptr_(std::addressof(val)) {}
 
-    constexpr T*       begin() noexcept { return ptr_; }
-    constexpr T const* begin() const noexcept { return ptr_; }
-    constexpr T*       end() noexcept { return ptr_ + 1; }
-    constexpr T const* end() const noexcept { return ptr_ + 1; }
+    constexpr T* begin() noexcept {
+        return ptr_;
+    }
+    constexpr T const* begin() const noexcept {
+        return ptr_;
+    }
+    constexpr T* end() noexcept {
+        return ptr_ + 1;
+    }
+    constexpr T const* end() const noexcept {
+        return ptr_ + 1;
+    }
 
-    static constexpr bool        empty() noexcept { return false; }
-    static constexpr std::size_t size() noexcept { return 1; }
+    static constexpr bool empty() noexcept {
+        return false;
+    }
+    static constexpr std::size_t size() noexcept {
+        return 1;
+    }
 
-    constexpr T*       data() noexcept { return ptr_; }
-    constexpr T const* data() const noexcept { return ptr_; }
+    constexpr T* data() noexcept {
+        return ptr_;
+    }
+    constexpr T const* data() const noexcept {
+        return ptr_;
+    }
 };
 
 template <typename T>
 inline constexpr bool enable_borrowed_buffer<ref_single_view<T>> = true;
 
-} // namespace kamping::ranges
+} // namespace kamping::v2
 
 template <typename T>
-inline constexpr bool std::ranges::enable_borrowed_range<kamping::ranges::ref_single_view<T>> = true;
+inline constexpr bool std::ranges::enable_borrowed_range<kamping::v2::ref_single_view<T>> = true;
 
-namespace kamping::views {
+namespace kamping::v2::views {
 
 /// Wraps a single lvalue element as a size-1 view, capturing by reference.
 ///   int val = 42;
@@ -55,7 +71,7 @@ namespace kamping::views {
 ///   auto buf = ref_single(std::as_const(val));   // ref_single_view<int const>
 template <typename T>
 constexpr auto ref_single(T& val) noexcept {
-    return kamping::ranges::ref_single_view<T>(val);
+    return kamping::v2::ref_single_view<T>(val);
 }
 
-} // namespace kamping::views
+} // namespace kamping::v2::views

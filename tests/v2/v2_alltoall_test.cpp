@@ -38,7 +38,7 @@ TEST(V2AlltoallTest, DeferredRecvBuffer) {
     std::vector<int> send_data(static_cast<std::size_t>(size), rank);
     std::vector<int> recv_data;
 
-    kamping::v2::alltoall(send_data, recv_data | kamping::views::resize);
+    kamping::v2::alltoall(send_data, recv_data | kamping::v2::views::resize);
 
     std::vector<int> expected(static_cast<std::size_t>(size));
     std::iota(expected.begin(), expected.end(), 0);

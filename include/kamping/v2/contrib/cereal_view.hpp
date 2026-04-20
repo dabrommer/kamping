@@ -10,7 +10,7 @@
 #include "kamping/builtin_types.hpp"
 #include "kamping/v2/views/adaptor.hpp"
 
-namespace kamping::ranges {
+namespace kamping::v2 {
 
 /// Wraps an object and serializes/deserializes it with cereal for MPI transport.
 ///
@@ -36,9 +36,9 @@ class serialization_view {
     mutable stored_t base_;
 
     mutable std::basic_string<char, std::char_traits<char>, Alloc> buffer_;
-    mutable bool   serialized_            = false;
-    mutable bool   needs_deserialization_ = false;
-    std::ptrdiff_t recv_count_            = 0;
+    mutable bool                                                   serialized_            = false;
+    mutable bool                                                   needs_deserialization_ = false;
+    std::ptrdiff_t                                                 recv_count_            = 0;
 
     // base_ is mutable, so this is safe from const methods.
     // The const-lvalue-ref case (value_type is const-qualified) is prevented from
@@ -70,8 +70,8 @@ class serialization_view {
     };
 
     void do_deserialize() const {
-        membuf                   mb(buffer_.data(), buffer_.size());
-        std::basic_istream<char> is(&mb);
+        membuf                     mb(buffer_.data(), buffer_.size());
+        std::basic_istream<char>   is(&mb);
         cereal::BinaryInputArchive ar(is);
         ar(base_ref());
         buffer_.clear(); // received bytes no longer needed; known empty state
@@ -81,32 +81,44 @@ class serialization_view {
 public:
     /// Non-owning constructor: stores a pointer to the referenced object.
     /// Handles both `T&` and `T const&` (value_type may be const-qualified).
-    explicit serialization_view(value_type& obj) requires(!is_owning) : base_(&obj) {}
+    explicit serialization_view(value_type& obj)
+        requires(!is_owning)
+        : base_(&obj) {}
 
     /// Owning constructor: takes ownership of a moved object.
-    explicit serialization_view(value_type&& obj) requires(is_owning) : base_(std::move(obj)) {}
+    explicit serialization_view(value_type&& obj)
+        requires(is_owning)
+        : base_(std::move(obj)) {}
 
     /// Dereference to the wrapped object, triggering deserialization if needed.
     value_type& operator*() {
-        if (needs_deserialization_) do_deserialize();
+        if (needs_deserialization_)
+            do_deserialize();
         return base_ref();
     }
 
     value_type const& operator*() const {
-        if (needs_deserialization_) do_deserialize();
+        if (needs_deserialization_)
+            do_deserialize();
         return base_ref();
     }
 
-    value_type*       operator->() { return std::addressof(**this); }
-    value_type const* operator->() const { return std::addressof(**this); }
+    value_type* operator->() {
+        return std::addressof(**this);
+    }
+    value_type const* operator->() const {
+        return std::addressof(**this);
+    }
 
     // ---- Recv-side protocol -----------------------------------------------
 
     /// Called by infer() with the number of bytes to receive. Requires non-const T:
     /// deserialization writes into the wrapped object.
-    void set_recv_count(std::ptrdiff_t n) requires(!std::is_const_v<value_type>) {
-        recv_count_           = n;
-        serialized_           = false;
+    void set_recv_count(std::ptrdiff_t n)
+        requires(!std::is_const_v<value_type>)
+    {
+        recv_count_            = n;
+        serialized_            = false;
         needs_deserialization_ = true;
         buffer_.resize(static_cast<std::size_t>(n));
     }
@@ -114,8 +126,10 @@ public:
     // ---- MPI protocol methods --------------------------------------------
 
     std::ptrdiff_t mpi_count() const {
-        if (needs_deserialization_) return recv_count_;
-        if (!serialized_) do_serialize();
+        if (needs_deserialization_)
+            return recv_count_;
+        if (!serialized_)
+            do_serialize();
         return static_cast<std::ptrdiff_t>(buffer_.size());
     }
 
@@ -126,7 +140,8 @@ public:
     /// Returns a mutable pointer: satisfies send_buffer (void const* accepted) and
     /// recv_buffer (void* required). Serializes lazily on the send side.
     void* mpi_ptr() const {
-        if (!needs_deserialization_ && !serialized_) do_serialize();
+        if (!needs_deserialization_ && !serialized_)
+            do_serialize();
         return buffer_.data();
     }
 };
@@ -141,24 +156,23 @@ template <typename T>
     requires(!std::is_lvalue_reference_v<T>)
 serialization_view(T&&) -> serialization_view<T>;
 
+} // namespace kamping::v2
 
-} // namespace kamping::ranges
-
-namespace kamping::views {
-inline constexpr struct serialize_fn : kamping::ranges::adaptor_closure<serialize_fn> {
+namespace kamping::v2::views {
+inline constexpr struct serialize_fn : kamping::v2::adaptor_closure<serialize_fn> {
     template <typename R>
     constexpr auto operator()(R&& r) const {
-        return kamping::ranges::serialization_view(std::forward<R>(r));
+        return kamping::v2::serialization_view(std::forward<R>(r));
     }
 } serialize{};
 
 /// Returns an owning serialization_view<T> with a default-constructed T.
 /// Use as a recv buffer when the object does not exist yet:
-///   auto view = comm.recv(kamping::views::deserialize<MyType>(), 0);
+///   auto view = comm.recv(kamping::v2::views::deserialize<MyType>(), 0);
 ///   MyType& result = *view;
 template <typename T>
     requires std::default_initializable<T>
 auto deserialize() {
-    return kamping::ranges::serialization_view<T>(T{});
+    return kamping::v2::serialization_view<T>(T{});
 }
-} // namespace kamping::views
+} // namespace kamping::v2::views

@@ -6,7 +6,7 @@
 #include <mpi.h>
 
 #include "kamping/v2/collectives/scatter.hpp"
-#include "kamping/v2/tags.hpp"
+#include "kamping/v2/sentinels.hpp"
 #include "kamping/v2/views/resize_view.hpp"
 
 using namespace ::testing;
@@ -42,9 +42,9 @@ TEST_F(ScatterTest, scatter_resize) {
     if (rank_ == 0) {
         std::vector<int> send_data(static_cast<std::size_t>(2 * size_));
         std::iota(send_data.begin(), send_data.end(), 0);
-        kamping::v2::scatter(send_data, recv_data | kamping::views::resize);
+        kamping::v2::scatter(send_data, recv_data | kamping::v2::views::resize);
     } else {
-        kamping::v2::scatter(recv_data | kamping::views::resize);
+        kamping::v2::scatter(recv_data | kamping::v2::views::resize);
     }
 
     EXPECT_EQ(recv_data[0], 2 * rank_);
@@ -69,7 +69,7 @@ TEST_F(ScatterTest, scatter_inplace_on_root) {
 }
 
 TEST_F(ScatterTest, scatter_non_default_root) {
-    int const root = size_ - 1;
+    int const        root = size_ - 1;
     std::vector<int> recv_data(2);
 
     if (rank_ == root) {

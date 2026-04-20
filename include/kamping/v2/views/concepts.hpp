@@ -8,7 +8,7 @@
 
 #include <mpi/buffer.hpp>
 
-namespace kamping::ranges {
+namespace kamping::v2 {
 
 /// A buffer whose mpi_displs() are guaranteed to be monotonically non-decreasing
 /// (e.g. computed via exclusive_scan). When true, resize_v_view can use the O(1)
@@ -54,7 +54,7 @@ concept deferred_recv_buf_v = mpi::experimental::has_mpi_counts_mutable<T>
 //
 // To opt in a custom non-owning buffer type:
 //   template <>
-//   inline constexpr bool kamping::ranges::enable_borrowed_buffer<MyView> = true;
+//   inline constexpr bool kamping::v2::enable_borrowed_buffer<MyView> = true;
 // ──────────────────────────────────────────────────────────────────────────────
 template <typename T>
 inline constexpr bool enable_borrowed_buffer = std::ranges::borrowed_range<T>;
@@ -62,4 +62,4 @@ inline constexpr bool enable_borrowed_buffer = std::ranges::borrowed_range<T>;
 template <typename T>
 concept borrowed_buffer = enable_borrowed_buffer<std::remove_cvref_t<T>>;
 
-} // namespace kamping::ranges
+} // namespace kamping::v2

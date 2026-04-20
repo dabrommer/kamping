@@ -3,13 +3,12 @@
 #include <algorithm>
 #include <ranges>
 
-#include "kamping/v2/ranges/concepts.hpp"
-#include "kamping/v2/ranges/ranges.hpp"
 #include "kamping/v2/views/adaptor.hpp"
 #include "kamping/v2/views/all.hpp"
+#include "kamping/v2/views/concepts.hpp"
 #include "kamping/v2/views/view_interface.hpp"
 
-namespace kamping::ranges {
+namespace kamping::v2 {
 
 /// Variadic-receive counterpart of resize_view.
 ///
@@ -32,7 +31,7 @@ class resize_v_view : public view_interface<resize_v_view<Base>> {
 
 public:
     template <typename R>
-    explicit resize_v_view(R&& base) : base_(kamping::ranges::all(std::forward<R>(base))) {}
+    explicit resize_v_view(R&& base) : base_(kamping::v2::all(std::forward<R>(base))) {}
 
     constexpr Base& base() & noexcept {
         return base_;
@@ -67,30 +66,30 @@ public:
                 total = std::max(total, static_cast<std::ptrdiff_t>(displs_ptr[i] + counts_ptr[i]));
             }
         }
-        kamping::ranges::resize_for_receive(base_, total);
+        kamping::v2::resize_for_receive(base_, total);
         return mpi::experimental::ptr(base_);
     }
 };
 
 template <typename R>
-resize_v_view(R&&) -> resize_v_view<kamping::ranges::all_t<R>>;
+resize_v_view(R&&) -> resize_v_view<kamping::v2::all_t<R>>;
 
 template <typename Base>
 inline constexpr bool enable_borrowed_buffer<resize_v_view<Base>> = enable_borrowed_buffer<Base>;
 
-} // namespace kamping::ranges
+} // namespace kamping::v2
 
-namespace kamping::views {
+namespace kamping::v2::views {
 
 /// Wraps a base buffer (which must already provide mpi_counts() and mpi_displs()
 /// via e.g. with_counts | auto_displs or with_counts | with_displs) so the
 /// underlying data buffer is resized to the correct total size on mpi_ptr().
 /// Use as: buf | with_counts(...) | auto_displs(...) | resize_v
-inline constexpr struct resize_v_fn : kamping::ranges::adaptor_closure<resize_v_fn> {
+inline constexpr struct resize_v_fn : kamping::v2::adaptor_closure<resize_v_fn> {
     template <typename R>
     constexpr auto operator()(R&& r) const {
-        return kamping::ranges::resize_v_view(std::forward<R>(r));
+        return kamping::v2::resize_v_view(std::forward<R>(r));
     }
 } resize_v{};
 
-} // namespace kamping::views
+} // namespace kamping::v2::views

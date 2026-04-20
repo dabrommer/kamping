@@ -8,7 +8,7 @@
 #include "kamping/v2/comm_op.hpp"
 #include "kamping/v2/infer.hpp"
 #include "kamping/v2/result.hpp"
-#include "kamping/v2/tags.hpp"
+#include "kamping/v2/sentinels.hpp"
 #include "mpi/collectives/reduce.hpp"
 #include "mpi/handle.hpp"
 #include "mpi/ops.hpp"
@@ -41,8 +41,7 @@ template <
     mpi::experimental::valid_op<SBuf, null_buf_t>          Op   = std::plus<>,
     mpi::experimental::rank                                Root = int,
     mpi::experimental::convertible_to_mpi_handle<MPI_Comm> Comm = MPI_Comm>
-auto reduce(SBuf&& sbuf, Op const& op = std::plus<>{}, Root root = 0, Comm const& comm = MPI_COMM_WORLD)
-    -> SBuf {
+auto reduce(SBuf&& sbuf, Op const& op = std::plus<>{}, Root root = 0, Comm const& comm = MPI_COMM_WORLD) -> SBuf {
     auto res = kamping::v2::reduce(std::forward<SBuf>(sbuf), null_buf_t{}, op, std::move(root), comm);
     return std::move(res).send;
 }

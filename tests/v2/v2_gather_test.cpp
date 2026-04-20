@@ -7,7 +7,7 @@
 #include <mpi.h>
 
 #include "kamping/v2/collectives/gather.hpp"
-#include "kamping/v2/tags.hpp"
+#include "kamping/v2/sentinels.hpp"
 #include "kamping/v2/views/resize_view.hpp"
 
 class GatherTest : public ::testing::Test {
@@ -52,7 +52,7 @@ TEST_F(GatherTest, gather_resize) {
 
     if (rank_ == 0) {
         std::vector<int> recv_data(static_cast<std::size_t>(2 * size_));
-        kamping::v2::gather(send_data, recv_data | kamping::views::resize);
+        kamping::v2::gather(send_data, recv_data | kamping::v2::views::resize);
         std::vector<int> expected(static_cast<std::size_t>(2 * size_));
         std::ranges::iota(expected, 0);
         EXPECT_THAT(recv_data, testing::ElementsAreArray(expected));

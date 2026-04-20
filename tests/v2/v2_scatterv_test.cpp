@@ -6,7 +6,7 @@
 #include <mpi.h>
 
 #include "kamping/v2/collectives/scatterv.hpp"
-#include "kamping/v2/tags.hpp"
+#include "kamping/v2/sentinels.hpp"
 #include "kamping/v2/views.hpp"
 #include "kamping/v2/views/resize_view.hpp"
 
@@ -34,11 +34,11 @@ TEST_F(ScattervTest, variable_length_recv_auto_resize) {
             send_data.insert(send_data.end(), static_cast<std::size_t>(r) + 1, r);
         }
         kamping::v2::scatterv(
-            send_data | kamping::views::with_counts(counts) | kamping::views::auto_displs(),
-            recv_data | kamping::views::resize
+            send_data | kamping::v2::views::with_counts(counts) | kamping::v2::views::auto_displs(),
+            recv_data | kamping::v2::views::resize
         );
     } else {
-        kamping::v2::scatterv(kamping::v2::null_buf_v, recv_data | kamping::views::resize);
+        kamping::v2::scatterv(kamping::v2::null_buf_v, recv_data | kamping::v2::views::resize);
     }
 
     EXPECT_EQ(static_cast<int>(recv_data.size()), rank_ + 1);
@@ -56,7 +56,7 @@ TEST_F(ScattervTest, variable_length_recv_presized) {
             send_data.insert(send_data.end(), static_cast<std::size_t>(r) + 1, r);
         }
         kamping::v2::scatterv(
-            send_data | kamping::views::with_counts(counts) | kamping::views::auto_displs(),
+            send_data | kamping::v2::views::with_counts(counts) | kamping::v2::views::auto_displs(),
             recv_data
         );
     } else {
@@ -79,12 +79,12 @@ TEST_F(ScattervTest, non_default_root) {
             send_data.insert(send_data.end(), static_cast<std::size_t>(r) + 1, r);
         }
         kamping::v2::scatterv(
-            send_data | kamping::views::with_counts(counts) | kamping::views::auto_displs(),
-            recv_data | kamping::views::resize,
+            send_data | kamping::v2::views::with_counts(counts) | kamping::v2::views::auto_displs(),
+            recv_data | kamping::v2::views::resize,
             root
         );
     } else {
-        kamping::v2::scatterv(kamping::v2::null_buf_v, recv_data | kamping::views::resize, root);
+        kamping::v2::scatterv(kamping::v2::null_buf_v, recv_data | kamping::v2::views::resize, root);
     }
 
     EXPECT_EQ(static_cast<int>(recv_data.size()), rank_ + 1);

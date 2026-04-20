@@ -52,7 +52,7 @@
 
 #include "kamping/v2/views/all.hpp"
 
-namespace kamping::ranges {
+namespace kamping::v2 {
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Closure base and concept
@@ -70,12 +70,10 @@ concept is_adaptor_closure = std::derived_from<std::remove_cvref_t<T>, adaptor_c
 /// Used to route std_closure | kamping_closure to composition rather than applying the
 /// kamping closure to the std closure as a value.
 template <typename T>
-concept is_external_closure =
-    !std::ranges::range<std::remove_cvref_t<T>> &&
-    !is_adaptor_closure<T> &&
-    requires(std::remove_cvref_t<T> const& t, std::ranges::empty_view<int> r) {
-        { t(r) } -> std::ranges::range;
-    };
+concept is_external_closure = !std::ranges::range<std::remove_cvref_t<T>> && !is_adaptor_closure<T>
+                              && requires(std::remove_cvref_t<T> const& t, std::ranges::empty_view<int> r) {
+                                     { t(r) } -> std::ranges::range;
+                                 };
 
 // ──────────────────────────────────────────────────────────────────────────────
 // adaptor_closure — CRTP base providing operator|
@@ -126,9 +124,7 @@ struct composed_closure : adaptor_closure<composed_closure<First, Second>> {
     [[no_unique_address]] First  first_;
     [[no_unique_address]] Second second_;
 
-    constexpr composed_closure(First first, Second second)
-        : first_(std::move(first)),
-          second_(std::move(second)) {}
+    constexpr composed_closure(First first, Second second) : first_(std::move(first)), second_(std::move(second)) {}
 
     template <typename T>
     constexpr auto operator()(T&& val) const& {
@@ -154,7 +150,7 @@ namespace detail {
 template <typename Arg>
 constexpr decltype(auto) store_arg(Arg&& arg) {
     if constexpr (std::ranges::range<std::remove_cvref_t<Arg>>)
-        return kamping::ranges::all(std::forward<Arg>(arg));
+        return kamping::v2::all(std::forward<Arg>(arg));
     else
         return std::decay_t<Arg>(std::forward<Arg>(arg));
 }
@@ -168,28 +164,20 @@ constexpr decltype(auto) store_arg(Arg&& arg) {
 template <typename Fn, typename... BoundArgs>
 struct partial_adaptor : adaptor_closure<partial_adaptor<Fn, BoundArgs...>> {
     [[no_unique_address]] Fn fn_;
-    std::tuple<BoundArgs...>  bound_;
+    std::tuple<BoundArgs...> bound_;
 
-    constexpr partial_adaptor(Fn fn, std::tuple<BoundArgs...> bound)
-        : fn_(std::move(fn)),
-          bound_(std::move(bound)) {}
+    constexpr partial_adaptor(Fn fn, std::tuple<BoundArgs...> bound) : fn_(std::move(fn)), bound_(std::move(bound)) {}
 
     template <typename T>
     constexpr auto operator()(T&& val) const& {
-        return std::apply(
-            [&](auto const&... args) { return fn_(std::forward<T>(val), args...); },
-            bound_
-        );
+        return std::apply([&](auto const&... args) { return fn_(std::forward<T>(val), args...); }, bound_);
     }
 
     // Rvalue overload: moves stored arguments out so the resulting view takes ownership
     // rather than holding a ref_view into this closure's (about-to-be-destroyed) storage.
     template <typename T>
     constexpr auto operator()(T&& val) && {
-        return std::apply(
-            [&](auto&&... args) { return fn_(std::forward<T>(val), std::move(args)...); },
-            bound_
-        );
+        return std::apply([&](auto&&... args) { return fn_(std::forward<T>(val), std::move(args)...); }, bound_);
     }
 };
 
@@ -216,7 +204,8 @@ struct adaptor {
         requires(sizeof...(Args) == ExtraArgs)
     constexpr auto operator()(Args&&... args) const {
         return partial_adaptor<Fn, decltype(detail::store_arg(std::forward<Args>(args)))...>(
-            fn_, std::tuple{detail::store_arg(std::forward<Args>(args))...}
+            fn_,
+            std::tuple{detail::store_arg(std::forward<Args>(args))...}
         );
     }
 
@@ -228,4 +217,4 @@ struct adaptor {
     }
 };
 
-} // namespace kamping::ranges
+} // namespace kamping::v2

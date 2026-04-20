@@ -38,8 +38,8 @@ TEST(V2AlltoallvTest, LvalueRecvBuf) {
 
     std::vector<int> recv_data;
     kamping::v2::alltoallv(
-        send_data | kamping::views::with_counts(send_counts) | kamping::views::with_displs(send_displs),
-        recv_data | kamping::views::auto_recv_v
+        send_data | kamping::v2::views::with_counts(send_counts) | kamping::v2::views::with_displs(send_displs),
+        recv_data | kamping::v2::views::auto_recv_v
     );
 
     std::vector<int> expected;
@@ -60,7 +60,7 @@ TEST(V2AlltoallvTest, OwnedAutoRecvV) {
     auto [send_data, send_counts, send_displs] = build_send(rank, size);
 
     auto res = kamping::v2::alltoallv(
-        send_data | kamping::views::with_counts(send_counts) | kamping::views::with_displs(send_displs),
+        send_data | kamping::v2::views::with_counts(send_counts) | kamping::v2::views::with_displs(send_displs),
         kamping::v2::auto_recv_v<int>()
     );
 
@@ -88,8 +88,8 @@ TEST(V2AlltoallvTest, UniformSingleElement) {
 
     std::vector<int> recv_data;
     kamping::v2::alltoallv(
-        send_data | kamping::views::with_counts(send_counts) | kamping::views::with_displs(send_displs),
-        recv_data | kamping::views::auto_recv_v
+        send_data | kamping::v2::views::with_counts(send_counts) | kamping::v2::views::with_displs(send_displs),
+        recv_data | kamping::v2::views::auto_recv_v
     );
 
     std::vector<int> expected(static_cast<std::size_t>(size));
@@ -109,8 +109,8 @@ TEST(V2AlltoallvTest, AllEmpty) {
 
     std::vector<int> recv_data;
     kamping::v2::alltoallv(
-        send_data | kamping::views::with_counts(send_counts) | kamping::views::with_displs(send_displs),
-        recv_data | kamping::views::auto_recv_v
+        send_data | kamping::v2::views::with_counts(send_counts) | kamping::v2::views::with_displs(send_displs),
+        recv_data | kamping::v2::views::auto_recv_v
     );
 
     EXPECT_TRUE(recv_data.empty());

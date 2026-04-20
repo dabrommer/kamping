@@ -110,7 +110,7 @@ TEST_F(ReduceTest, reduce_non_root_shorthand_and_inplace_on_root_resize_not_trig
         kamping::v2::reduce(data, MPI_SUM, 0);
     } else {
         // Root: inplace form, resizing should not be triggered and data.size() should be used.
-        kamping::v2::reduce(kamping::v2::inplace, data | kamping::views::resize, MPI_SUM, 0);
+        kamping::v2::reduce(kamping::v2::inplace, data | kamping::v2::views::resize, MPI_SUM, 0);
 
         int expected_sum_ranks       = size_ * (size_ - 1) / 2;
         int expected_sum_rank_plus_1 = size_ * (size_ - 1) / 2 + size_;

@@ -22,7 +22,7 @@ TEST(V2AllgathervTest, VariableLengthSend) {
 
     kamping::v2::allgatherv(
         send_data,
-        recv_data | kamping::views::auto_counts() | kamping::views::auto_displs() | kamping::views::resize_v
+        recv_data | kamping::v2::views::auto_counts() | kamping::v2::views::auto_displs() | kamping::v2::views::resize_v
     );
 
     std::vector<int> expected;
@@ -43,7 +43,7 @@ TEST(V2AllgathervTest, UniformSingleElementSend) {
 
     kamping::v2::allgatherv(
         send_data,
-        recv_data | kamping::views::auto_counts() | kamping::views::auto_displs() | kamping::views::resize_v
+        recv_data | kamping::v2::views::auto_counts() | kamping::v2::views::auto_displs() | kamping::v2::views::resize_v
     );
 
     std::vector<int> expected(static_cast<std::size_t>(size));
@@ -62,7 +62,7 @@ TEST(V2AllgathervTest, RankZeroSendsEmptyBuffer) {
 
     kamping::v2::allgatherv(
         send_data,
-        recv_data | kamping::views::auto_counts() | kamping::views::auto_displs() | kamping::views::resize_v
+        recv_data | kamping::v2::views::auto_counts() | kamping::v2::views::auto_displs() | kamping::v2::views::resize_v
     );
 
     std::vector<int> expected;
@@ -84,7 +84,8 @@ TEST(V2AllgathervTest, UserProvidedCountsBuffer) {
 
     kamping::v2::allgatherv(
         send_data,
-        recv_data | kamping::views::auto_counts(counts) | kamping::views::auto_displs() | kamping::views::resize_v
+        recv_data | kamping::v2::views::auto_counts(counts) | kamping::v2::views::auto_displs()
+            | kamping::v2::views::resize_v
     );
 
     std::vector<int> expected;
@@ -107,7 +108,10 @@ TEST(V2AllgathervTest, ExplicitCountsAutoDisplsNoResize) {
     std::vector<int> counts(static_cast<std::size_t>(size)); // pre-sized, no auto-resize
     std::ranges::iota(counts, 1);
 
-    kamping::v2::allgatherv(send_data, recv_data | kamping::views::with_counts(counts) | kamping::views::auto_displs());
+    kamping::v2::allgatherv(
+        send_data,
+        recv_data | kamping::v2::views::with_counts(counts) | kamping::v2::views::auto_displs()
+    );
 
     std::vector<int> expected;
     for (int r = 0; r < size; ++r) {

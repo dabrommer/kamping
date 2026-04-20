@@ -6,7 +6,7 @@
 #include <mpi.h>
 
 #include "kamping/v2/collectives/gatherv.hpp"
-#include "kamping/v2/tags.hpp"
+#include "kamping/v2/sentinels.hpp"
 #include "kamping/v2/views.hpp"
 #include "kamping/v2/views/resize_v_view.hpp"
 
@@ -30,7 +30,8 @@ TEST_F(GathervTest, variable_length_send_auto_recv) {
         std::vector<int> recv_data;
         auto [s, r] = kamping::v2::gatherv(
             send_data,
-            recv_data | kamping::views::auto_counts() | kamping::views::auto_displs() | kamping::views::resize_v
+            recv_data | kamping::v2::views::auto_counts() | kamping::v2::views::auto_displs()
+                | kamping::v2::views::resize_v
         );
         std::vector<int> expected;
         for (int i = 0; i < size_; ++i) {
@@ -50,7 +51,8 @@ TEST_F(GathervTest, uniform_send_count) {
         std::vector<int> recv_data;
         kamping::v2::gatherv(
             send_data,
-            recv_data | kamping::views::auto_counts() | kamping::views::auto_displs() | kamping::views::resize_v
+            recv_data | kamping::v2::views::auto_counts() | kamping::v2::views::auto_displs()
+                | kamping::v2::views::resize_v
         );
         std::vector<int> expected(static_cast<std::size_t>(2 * size_));
         std::iota(expected.begin(), expected.end(), 0);
@@ -69,7 +71,8 @@ TEST_F(GathervTest, non_default_root) {
         std::vector<int> recv_data;
         kamping::v2::gatherv(
             send_data,
-            recv_data | kamping::views::auto_counts() | kamping::views::auto_displs() | kamping::views::resize_v,
+            recv_data | kamping::v2::views::auto_counts() | kamping::v2::views::auto_displs()
+                | kamping::v2::views::resize_v,
             root
         );
         std::vector<int> expected;

@@ -7,7 +7,7 @@
 #include "kamping/v2/views/auto_displs_view.hpp"
 #include "kamping/v2/views/resize_v_view.hpp"
 
-namespace kamping::views {
+namespace kamping::v2::views {
 
 /// Pipe adaptor combining auto_counts() | auto_displs() | resize_v in a single step.
 ///
@@ -19,17 +19,15 @@ namespace kamping::views {
 /// Usage:
 ///   recv_buf | views::auto_recv_v                      // lvalue — borrows recv_buf
 ///   v2::auto_recv_v<int>()                             // owned factory form
-inline constexpr struct auto_recv_v_fn : kamping::ranges::adaptor_closure<auto_recv_v_fn> {
+inline constexpr struct auto_recv_v_fn : kamping::v2::adaptor_closure<auto_recv_v_fn> {
     template <typename R>
     constexpr auto operator()(R&& r) const {
-        return std::forward<R>(r)
-               | kamping::views::auto_counts()
-               | kamping::views::auto_displs()
-               | kamping::views::resize_v;
+        return std::forward<R>(r) | kamping::v2::views::auto_counts() | kamping::v2::views::auto_displs()
+               | kamping::v2::views::resize_v;
     }
 } auto_recv_v{};
 
-} // namespace kamping::views
+} // namespace kamping::v2::views
 
 namespace kamping::v2 {
 
@@ -45,7 +43,7 @@ namespace kamping::v2 {
 /// the second argument when needed.
 template <typename T, typename Cont = std::vector<T>>
 auto auto_recv_v() {
-    return Cont{} | kamping::views::auto_recv_v;
+    return Cont{} | kamping::v2::views::auto_recv_v;
 }
 
 } // namespace kamping::v2

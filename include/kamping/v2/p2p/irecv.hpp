@@ -77,7 +77,7 @@ template <
 auto irecv(RBuf&& rbuf, Source source = MPI_ANY_SOURCE, Tag tag = MPI_ANY_TAG, Comm const& comm = MPI_COMM_WORLD)
     -> iresult<RBuf> {
     iresult<RBuf> res{std::forward<RBuf>(rbuf)};
-    using view_t                             = ranges::all_t<RBuf>;
+    using view_t                             = kamping::v2::all_t<RBuf>;
     constexpr bool infer_returns_mpi_message = requires(view_t& v, Source source_, Tag tag_, Comm const& comm_) {
         {
             infer(

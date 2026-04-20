@@ -4,7 +4,7 @@
 #include <mpi.h>
 
 #include "kamping/v2/collectives/allreduce.hpp"
-#include "kamping/v2/tags.hpp"
+#include "kamping/v2/sentinels.hpp"
 #include "kamping/v2/views/resize_view.hpp"
 
 using namespace ::kamping;
@@ -67,7 +67,7 @@ TEST_F(AllreduceTest, allreduce_resize) {
     std::vector<int> send_data = {rank_, rank_ + 1};
     std::vector<int> recv_data;
 
-    auto [s, r] = kamping::v2::allreduce(send_data, recv_data | kamping::views::resize, MPI_SUM);
+    auto [s, r] = kamping::v2::allreduce(send_data, recv_data | kamping::v2::views::resize, MPI_SUM);
 
     int expected_sum_ranks       = size_ * (size_ - 1) / 2;
     int expected_sum_rank_plus_1 = size_ * (size_ - 1) / 2 + size_;

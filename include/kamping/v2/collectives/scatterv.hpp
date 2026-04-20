@@ -7,7 +7,7 @@
 #include "kamping/v2/comm_op.hpp"
 #include "kamping/v2/infer.hpp"
 #include "kamping/v2/result.hpp"
-#include "kamping/v2/tags.hpp"
+#include "kamping/v2/sentinels.hpp"
 #include "mpi/buffer.hpp"
 #include "mpi/collectives/scatterv.hpp"
 #include "mpi/handle.hpp"

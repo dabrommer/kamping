@@ -55,3 +55,9 @@ kamping_register_mpi_test(
     FILES v2_scatterv_test.cpp
     CORES 1 2 4
 )
+
+kamping_register_mpi_test(
+    test_v2_request_view
+    FILES request_view_test.cpp
+    CORES 1 2
+)

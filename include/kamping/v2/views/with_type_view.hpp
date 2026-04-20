@@ -7,10 +7,10 @@
 #include "kamping/v2/views/all.hpp"
 #include "kamping/v2/views/view_interface.hpp"
 
-namespace kamping {
-namespace ranges {
+namespace kamping::v2 {
+
 template <typename Base>
-class with_type_view : public kamping::ranges::view_interface<with_type_view<Base>> {
+class with_type_view : public view_interface<with_type_view<Base>> {
     Base         base_;
     MPI_Datatype type_;
 
@@ -23,8 +23,8 @@ public:
     }
 
     template <typename R>
-    with_type_view(R&& base, MPI_Datatype type)
-        : base_(kamping::ranges::all(std::forward<R>(base))), type_(type) {}
+    with_type_view(R&& base, MPI_Datatype type) : base_(kamping::v2::all(std::forward<R>(base))),
+                                                  type_(type) {}
 
     constexpr auto mpi_type() const {
         return type_;
@@ -32,19 +32,18 @@ public:
 };
 
 template <typename R>
-with_type_view(R&&, MPI_Datatype) -> with_type_view<kamping::ranges::all_t<R>>;
+with_type_view(R&&, MPI_Datatype) -> with_type_view<kamping::v2::all_t<R>>;
 
 template <typename Base>
 inline constexpr bool enable_borrowed_buffer<with_type_view<Base>> = enable_borrowed_buffer<Base>;
 
-} // namespace ranges
+} // namespace kamping::v2
 
-namespace views {
+namespace kamping::v2::views {
 
-inline constexpr kamping::ranges::adaptor<1, decltype([](auto&& r, MPI_Datatype type) {
-    return kamping::ranges::with_type_view(std::forward<decltype(r)>(r), type);
-})> with_type{};
+inline constexpr kamping::v2::adaptor<1, decltype([](auto&& r, MPI_Datatype type) {
+                                          return kamping::v2::with_type_view(std::forward<decltype(r)>(r), type);
+                                      })>
+    with_type{};
 
-} // namespace views
-
-} // namespace kamping
+} // namespace kamping::v2::views
