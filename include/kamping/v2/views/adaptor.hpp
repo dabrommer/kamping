@@ -146,11 +146,16 @@ struct composed_closure : adaptor_closure<composed_closure<First, Second>> {
 namespace detail {
 /// Wraps a single argument for storage in a partial_adaptor:
 ///   - range arguments are wrapped via all() (lvalue → ref_view, rvalue → owning_view)
-///   - non-range arguments are stored by value (std::decay_t)
+///   - non-range, non-copyable lvalue references are stored as std::reference_wrapper
+///     (handles move-only types such as type_pool that must not be copied)
+///   - all other non-range arguments (copyable types like MPI_Datatype, int, …) are stored by value (std::decay_t)
 template <typename Arg>
 constexpr decltype(auto) store_arg(Arg&& arg) {
     if constexpr (std::ranges::range<std::remove_cvref_t<Arg>>)
         return kamping::v2::all(std::forward<Arg>(arg));
+    else if constexpr (std::is_lvalue_reference_v<Arg>
+                       && !std::is_copy_constructible_v<std::remove_reference_t<Arg>>)
+        return std::ref(arg);
     else
         return std::decay_t<Arg>(std::forward<Arg>(arg));
 }
