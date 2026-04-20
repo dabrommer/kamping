@@ -1,11 +1,131 @@
 # v2 TODO
 
+## Environment / Session
+
+### Info object (`include/mpi/info.hpp`)
+
+- [ ] **`mpi::experimental::info`** — owning RAII wrapper for `MPI_Info`.
+  Draft exists in PR #784 (v1 `kamping::Info`); adapt to `mpi::experimental::` with these fixes:
+  - Fix move assignment return type (`Info&`, not `Info` by value)
+  - Fix `get_nth_key`: null-terminate / truncate the returned string at the first `\0`
+  - Promote `KeyValueIterator` to a proper forward iterator (add `operator==`, value semantics)
+  - Expose `mpi_handle() const → MPI_Info` so the native-handle bridge picks it up automatically
+  - Keep `info_value_traits<T>` extensible traits for type-safe `set<T>` / `get<T>`
+
+- [ ] **`mpi::experimental::info_view`** — non-owning wrapper (mirrors `comm_view`); wraps
+  an existing `MPI_Info` without freeing it. Used when passing `MPI_INFO_NULL` or a borrowed handle.
+
+- [x] **`ThreadLevel` enum** (`include/mpi/thread_level.hpp`) — `mpi::experimental::ThreadLevel`
+  with `<=>` ordering; re-exported as `kamping::v2::ThreadLevel`. `info_value_traits<ThreadLevel>`
+  specialization deferred to the Info/Session work.
+
+### `v2::environment` (world-model initialization)
+
+- [x] **`v2::environment`** (`include/kamping/v2/environment.hpp`) — RAII wrapper for
+  `MPI_Init_thread` / `MPI_Finalize`. Non-copyable, non-movable. Destructor guards against
+  double-finalization. Explicit `finalize()` for error-handling use cases. Static `initialized()`,
+  `finalized()`, `thread_level()` queries. Utility methods (wtime, tag bounds, etc.) left out
+  intentionally — those belong elsewhere in v2.
+
+### `v2::session` (MPI-4 sessions model)
+
+- [ ] **`v2::session`** — owning RAII wrapper for `MPI_Session`. Move-only (delete copy).
+  Draft exists in PR #772; adapt with these fixes:
+  - Destructor must guard against calling `MPI_Session_finalize` after MPI is already finalized
+  - Make move-only: delete copy constructor/assignment; define move constructor/assignment
+  - `pset_name_is_valid` KASSERT is O(N psets × MPI calls) — replace with a cheap syntactic
+    check (non-empty, valid prefix) rather than enumerating all psets
+  - Expose psets as a lazy range via `session::psets() → /*range of string*/` rather than
+    requiring the caller to manage `begin`/`end` with an `Info` argument
+
+  ```cpp
+  kamping::v2::session s(ThreadLevel::multiple);
+  auto group = s.group_from_pset(kamping::v2::psets::world);
+  auto comm  = group->create_comm("my-tag");   // → comm_view (or v2::comm once owning comm exists)
+  ```
+
+- [ ] **`v2::psets` namespace** — port `psets::world` / `psets::self` constants from PR #772.
+
+- [ ] **`Group` at `mpi::experimental::` layer** — `group_view` (non-owning) + `group` (owning).
+  `group_view::create_comm(tag, info)` → `comm_view` via `MPI_Comm_create_from_group`; wraps the
+  forward-declaration trick from PR #772 in a cleaner two-file split.
+
 ## Handle types
 
 - [x] **`mpi::experimental::status`** / **`status_view`** — done (`include/mpi/status.hpp`); re-exported from `kamping::v2::` via `include/kamping/v2/status.hpp`
 - [x] **`mpi::experimental::comm_view`** — non-owning wrapper (`include/mpi/comm.hpp`); CRTP mixin `comm_accessors` with `.rank()`, `.size()`, `.native()`
 - [x] **`mpi::experimental::request_view`** — non-owning wrapper (`include/mpi/request.hpp`); re-exported from `kamping::v2::` via `include/kamping/v2/request.hpp`; used in `iresult_base` do_wait/do_test
-- [ ] **`kamping::v2::comm`** (deferred) — owning communicator; not needed until subcommunicator creation is a priority
+- [ ] **`kamping::v2::comm`** — owning communicator with RAII `MPI_Comm_free`. Prerequisite for
+  split/dup below. Extends `comm_accessors` like `comm_view`.
+- [ ] **`comm_view::dup()`** → `v2::comm` — `MPI_Comm_dup`; most common subcommunicator operation.
+- [ ] **`comm_view::split(color, key)`** → `v2::comm` — `MPI_Comm_split`.
+
+## Request pool
+
+Collects heterogeneous `iresult`s and waits for them in bulk via `MPI_Waitall`, which is
+more efficient than waiting on each individually.
+
+### Data model
+
+```
+request_pool
+  pending_: vector<unique_ptr<iresult_base>>   ← type-erased ownership
+  waited_:  bool                               ← guards get() before waitall()
+
+ticket<Bufs...>
+  idx_:   size_t           ← index into pool's pending_ vector
+  pool_:  request_pool*    ← back-pointer; ticket.get() delegates to pool.get(*this)
+```
+
+`iresult_base` already exposes `mpi_native_handle_ptr() → MPI_Request*` — no interface
+changes needed.
+
+### `push(iresult<Bufs...>&&) → ticket<Bufs...>`
+
+Moves the `iresult` into a `unique_ptr<iresult_base>` and appends to `pending_`. Returns a
+typed `ticket` holding the index and a back-pointer to the pool.
+
+### `waitall()`
+
+```cpp
+void waitall() {
+    std::vector<MPI_Request> reqs;
+    for (auto& r : pending_) reqs.push_back(*r->mpi_native_handle_ptr());
+    MPI_Waitall(reqs.size(), reqs.data(), MPI_STATUSES_IGNORE);
+    // Null out the stored requests so iresult_base destructors don't double-wait.
+    for (auto& r : pending_) *r->mpi_native_handle_ptr() = MPI_REQUEST_NULL;
+    waited_ = true;
+}
+```
+
+### `ticket<Bufs...>::get()` / `pool.get(ticket<Bufs...>)`
+
+```cpp
+decltype(auto) get(ticket<Bufs...> const& t) {
+    KAMPING_ASSERT(waited_, "call waitall() before get()");
+    auto* r = static_cast<iresult<Bufs...>*>(pending_[t.idx_].get());
+    return r->wait();  // MPI_Wait on MPI_REQUEST_NULL is a no-op; falls through to extract_buf()
+}
+```
+
+No changes to `iresult` needed. The `static_cast` is safe because `push()` recorded the
+concrete type in the ticket at call time.
+
+### Destruction
+
+No special destructor logic needed: if `waitall()` was not called, each `iresult_base`
+destructor individually calls `MPI_Wait` on its own request (existing behavior). Correct
+but less efficient than a single `MPI_Waitall` — the same trade-off as forgetting to call
+`wait()` on a standalone `iresult`.
+
+### `testsome()` (design open)
+
+`MPI_Testsome` returns indices of completed requests. The pool collects non-null requests,
+calls `MPI_Testsome`, and nulls out the completed ones. The open question is the return type:
+tickets are heterogeneous (`ticket<SBuf>`, `ticket<RBuf>`, ...) so a plain vector doesn't
+work. Candidates: return indices (`vector<size_t>`) with manual cast, callbacks registered
+at push time, or restrict the pool to homogeneous buffer types. Needs a dedicated design
+session before implementation.
 
 ## P2P
 
@@ -333,6 +453,62 @@ Three zero-overhead sentinel buffer types. All implemented.
   ```cpp
   v2::send(v2::bottom | views::with_type(my_abs_type) | views::with_size(1), dest, comm);
   ```
+
+## Type pool (`include/kamping/v2/type_pool.hpp`)
+
+- [x] **`type_pool`** — move-only registry that owns committed `MPI_Datatype` handles for the
+  lifetime of the pool. `register_type<T>()` commits on first call (idempotent); `find<T>()`
+  is a const lookup returning `std::nullopt` if not yet registered. Builtin types always
+  return immediately without storing anything.
+- [x] **`views::with_pool`** — pipe adaptor; attaches the registered type from a `const` pool.
+  Asserts the type was pre-registered; call `register_type<T>()` first.
+- [x] **`views::with_auto_pool`** — pipe adaptor; takes a mutable pool ref and calls
+  `register_type<T>()` lazily on first use.
+
+## Derived-type view factories
+
+Factories that create, commit, and own a derived `MPI_Datatype` inside a move-only closure.
+The closure is assigned to a named variable; its lifetime bounds the type's validity. Multiple
+MPI calls can reuse the same closure without re-committing. No `type_pool` needed — scope
+manages the lifetime naturally.
+
+```cpp
+auto int_stride_2 = kamping::v2::make_strided_view<int>(2);
+kamping::v2::send(sbuf | int_stride_2, dest, comm);
+kamping::v2::send(sbuf2 | int_stride_2, dest, comm);  // reuses the same committed type
+```
+
+When applied to a range `r`, the resulting view exposes:
+- `mpi_ptr()` → `std::ranges::data(r)` (original contiguous pointer)
+- `mpi_type()` → the committed derived `MPI_Datatype` owned by the closure
+- `mpi_count()` → element count adjusted for the derived type (e.g. `size / stride`)
+- Optionally forwards `std::views::strided` / similar for iteration ergonomics
+
+The closure is move-only (contains a `ScopedDatatype`); passing by lvalue ref in a pipe
+borrows it safely via the existing `store_arg` `std::ref` path.
+
+- [ ] **`make_strided_view<T>(stride)`** — commits `MPI_Type_vector(1, 1, stride, mpi_type<T>)`
+  with resized extent so it tiles correctly; `mpi_count()` = `size / stride`.
+- [ ] **`make_subarray_view<T>(...)`** — commits `MPI_Type_create_subarray` for multi-dimensional
+  array sections; useful for halo exchange in structured-grid codes.
+- [ ] **`make_struct_view<T>()`** — commits `MPI_Type_create_struct` from field offsets (via
+  Boost.PFR reflection or manual specification); alternative to `byte_serialized` that
+  respects MPI's struct type rules and avoids transmitting padding bytes.
+
+## kamping-types: standard-library type specializations
+
+v1 ships `include/kamping/types/utility.hpp` and `tuple.hpp` for `std::pair` and `std::tuple`
+(struct-type serialization). The kamping-types module has no equivalent yet.
+
+- [ ] **`kamping/types/utility.hpp`** — specialize `kamping::types::mpi_type_traits` for
+  `std::pair<F, S>` via `struct_type` (mirroring v1).
+- [ ] **`kamping/types/tuple.hpp`** — same for `std::tuple<Ts...>`.
+- [ ] **`kamping/types/unsafe/utility.hpp`** — `std::pair<F, S>` via `byte_serialized` (ignores padding; mirrors v1 unsafe variant).
+- [ ] **`kamping/types/unsafe/tuple.hpp`** — `std::tuple<Ts...>` via `byte_serialized` (same caveat).
+- [ ] **`kamping/types/unsafe/trivially_copyable.hpp`** — opt-in catch-all partial specialization
+  for any `std::is_trivially_copyable_v<T>` type not already covered, using `byte_serialized<T>`.
+  Padding bytes are silently included — correct for packed structs, wrong for structs with
+  padding holes. Users opt in knowingly.
 
 ## `recv_v<T>()` helper
 
