@@ -317,126 +317,26 @@ no file moves. kamping-v2 stays `kamping::v2::` throughout.
 
 ## Reduction operation handling
 
-Reduction collectives (`reduce`, `allreduce`, `scan`, `exscan`) need to resolve a user-provided
-op argument to an `MPI_Op` at the point of the MPI call. The design mirrors the buffer accessor
-system (`kamping::core::type/size/data`) so op resolution is externalized rather than baked into
-each collective's implementation.
+Done. Implemented in `include/mpi/ops.hpp`. The final API names differ slightly from the plan:
 
-### `builtin_mpi_handle` — add `MPI_Op`
+| Planned | Implemented |
+|---|---|
+| `op_traits<Op, SBuf>` (single buffer) | `op_traits<Op, SBuf, RBuf>` (both buffers; allows asymmetric ops) |
+| `mpi_op_for<Op, SBuf>` concept | `valid_op<Op, SBuf, RBuf>` concept |
+| `native_op<SBuf>(op)` free function | `as_mpi_op(op, sbuf, rbuf)` free function |
 
-- [ ] Add `MPI_Op` to the `builtin_mpi_handle` concept in `handle.hpp` so that raw
-  `MPI_Op` values pass through `mpi::experimental::handle` unchanged, consistent with `MPI_Comm`,
-  `MPI_Datatype`, etc.
+Three-tier dispatch in `as_mpi_op`:
+1. `op_traits<Op,SBuf,RBuf>` specialization — non-intrusive customization point
+2. `convertible_to_mpi_handle<Op, MPI_Op>` — raw `MPI_Op` passthrough (already in `builtin_handle`)
+3. `mpi_operation_traits<Op, range_value_t<Buf>>` — builtin functor inference from element type
 
-### `native_handle_traits` for kamping-types op/type wrappers
+`handle_traits` specializations for `ScopedOp` / `ScopedFunctorOp` / `ScopedCallbackOp` /
+`ScopedDatatype` were intentionally not added: creating and lifetime-managing those objects
+is the caller's responsibility at the core layer. Users pass `.get()` directly or wrap in
+`op_traits`. v2 may add convenience wrappers if needed.
 
-- [ ] Specialize `mpi::experimental::handle_traits` for `kamping::types::ScopedOp`,
-  `kamping::types::ScopedFunctorOp`, and `kamping::types::ScopedCallbackOp` so they satisfy
-  `convertible_to_mpi_handle<MPI_Op>` and can be passed directly to `mpi::experimental::` collectives.
-- [ ] Specialize `mpi::experimental::handle_traits` for `kamping::types::ScopedDatatype` so it
-  satisfies `convertible_to_mpi_handle<MPI_Datatype>` — the only kamping-types datatype wrapper
-  that needs to reach the core layer (committed derived types; complex type pools belong in v2).
-
-### `mpi::experimental::op_traits<Op, SBuf>` — buffer-aware customization point
-
-`kamping-types` keeps `mpi_operation_traits<Op, T>` element-type-centric (standalone module,
-no buffer concept dependency). The core layer owns a separate buffer-aware trait:
-
-```cpp
-// primary — not a builtin by default
-template <typename Op, data_buffer SBuf>
-struct op_traits {
-    static constexpr bool is_builtin = false;
-};
-
-// default for ranges — delegates to kamping-types
-template <typename Op, std::ranges::range SBuf>
-    requires types::mpi_operation_traits<Op, std::ranges::range_value_t<SBuf>>::is_builtin
-struct op_traits<Op, SBuf> {
-    static constexpr bool is_builtin = true;
-    static MPI_Op op() {
-        return types::mpi_operation_traits<Op, std::ranges::range_value_t<SBuf>>::op();
-    }
-};
-```
-
-Users can specialize `mpi::experimental::op_traits<Op, SBuf>` non-intrusively for custom buffer+op
-combinations, parallel to `mpi::experimental::buffer_traits<T>` for buffer types.
-
-### `mpi_op_for<Op, SBuf>` concept
-
-```cpp
-template <typename Op, typename SBuf>
-concept mpi_op_for = bridge::convertible_to_mpi_handle<Op, MPI_Op>
-                  || (std::ranges::range<SBuf> && op_traits<Op, SBuf>::is_builtin);
-```
-
-The `std::ranges::range<SBuf>` guard is required because `op_traits`'s default range
-specialization accesses `range_value_t<SBuf>`, which is only valid for range types.
-For raw-pointer / `mpi_span` buffers only `convertible_to_mpi_handle<MPI_Op>` applies —
-builtin functor inference requires a typed range.
-
-### `mpi::experimental::native_op<SBuf>(op)` — free function customization point
-
-Analogous to `mpi::experimental::type(buf)` / `mpi::experimental::count(buf)`:
-
-```cpp
-template <data_buffer SBuf, typename Op>
-    requires mpi_op_for<Op, SBuf>
-MPI_Op native_op(Op const& op) {
-    if constexpr (mpi::experimental::convertible_to_handle<Op, MPI_Op>)
-        return mpi::experimental::handle(op);
-    else
-        return op_traits<Op, SBuf>::op();
-}
-```
-
-`T` is never extracted at the top of `native_op` — `op_traits<Op, SBuf>::op()` is only
-instantiated in the `else` branch, where `mpi_op_for` already guarantees `SBuf` is a range.
-
-### Inplace handling for reduction collectives
-
-Reduction collectives (reduce, allreduce, scan, exscan) are fundamentally asymmetric across ranks:
-the buffer role differs depending on whether it's inplace and on which rank the operation is.
-
-**Design decision:** Branch on `ptr(sbuf) == MPI_IN_PLACE` to determine the correct interpretation:
-- **Inplace** (`sbuf` is sentinel): count/type from `rbuf`; only valid on root
-- **Normal** (two-buffer): count/type from `sbuf`; on root, must match `rbuf` (asserted)
-
-This avoids forcing reduce into a false "recv-centric" model where the receive buffer describes
-all ranks' contributions.
-
-```cpp
-template <send_buffer SBuf, recv_buffer RBuf, typename Op>
-void reduce(SBuf&& sbuf, RBuf&& rbuf, Op&& op, int root, MPI_Comm comm) {
-    auto sbuf_ptr = ptr(sbuf);
-    int rank = 0;
-    MPI_Comm_rank(handle(comm), &rank);
-    int root_rank = to_rank(root);
-
-    if (sbuf_ptr == MPI_IN_PLACE) {
-        // Inplace: count and type from rbuf
-        KASSERT(rank == root_rank, "inplace reduce only valid on root");
-        MPI_Reduce(sbuf_ptr, ptr(rbuf), count(rbuf), type(rbuf), as_mpi_op(op, sbuf, rbuf), root_rank, comm);
-    } else {
-        // Normal: count and type from sbuf
-        KASSERT(rank != root_rank || count(sbuf) == count(rbuf), "on root: counts must match");
-        KASSERT(rank != root_rank || type(sbuf) == type(rbuf), "on root: types must match");
-        MPI_Reduce(sbuf_ptr, ptr(rbuf), count(sbuf), type(sbuf), as_mpi_op(op, sbuf, rbuf), root_rank, comm);
-    }
-}
-```
-
-The infer() protocol remains unchanged: it only sets recv counts on root, and deferred buffers on
-non-root are simply never given the chance to be deferred (they are null_buf or similar).
-
-The same pattern applies to `allreduce`, `scan`, `exscan`.
-
-### v2 responsibility
-
-Custom functor → `MPI_Op` creation (i.e. `ScopedFunctorOp`, `ScopedCallbackOp`) is the
-caller's responsibility at the core level. v2 may provide convenience wrappers that
-create and lifetime-manage these objects before delegating to `core::`.
+Inplace handling (branching on `ptr(sbuf) == MPI_IN_PLACE`) is implemented in `reduce` and
+`allreduce`; the same pattern applies to `scan`/`exscan` when those are added.
 
 ## Sentinels (`include/kamping/v2/tags.hpp`)
 
