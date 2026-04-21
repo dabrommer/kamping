@@ -58,22 +58,29 @@ int main(int argc, char* argv[]) {
         }
 
         {
+            // Example 1: receive into size X (rank + 1) matrix
             matrix_t recv_matrix("recv_matrix", static_cast<std::size_t>(size), static_cast<std::size_t>(rank + 1));
 
-            std::println("{}", matrix_to_string(rank, size, send_matrix, size));
+            // std::println("{}", matrix_to_string(rank, size, send_matrix, size));
 
             kamping::v2::alltoallv(
                 send_matrix | kamping::v2::views::kokkos | kamping::v2::views::with_counts(send_counts)
                     | kamping::v2::views::auto_displs(),
-                recv_matrix | kamping::v2::views::kokkos | kamping::v2::views::auto_counts() | kamping::v2::views::auto_displs(),
+                recv_matrix | kamping::v2::views::kokkos | kamping::v2::views::auto_counts()
+                    | kamping::v2::views::auto_displs(),
                 comm
             );
 
-            std::println("{}", matrix_to_string(rank, size, recv_matrix, rank + 1));
+            // std::println("{}", matrix_to_string(rank, size, recv_matrix, rank + 1));
         }
 
         {
-            matrix_t recv_matrix_full("recv_matrix_full", static_cast<std::size_t>(size), static_cast<std::size_t>(size));
+            // Example 2: receive into a contiguous subview (all columns, first rank+1 rows).
+            matrix_t recv_matrix_full(
+                "recv_matrix_full",
+                static_cast<std::size_t>(size),
+                static_cast<std::size_t>(size)
+            );
             for (std::size_t i = 0; i < recv_matrix_full.extent(0); ++i) {
                 for (std::size_t j = 0; j < recv_matrix_full.extent(1); ++j) {
                     recv_matrix_full(i, j) = -1;
@@ -86,23 +93,61 @@ int main(int argc, char* argv[]) {
                 Kokkos::ALL()
             );
 
-            std::println("{}", matrix_to_string(rank, size, recv_matrix_full, size));
+            // std::println("{}", matrix_to_string(rank, size, recv_matrix_full, size));
 
             kamping::v2::alltoallv(
                 send_matrix | kamping::v2::views::kokkos | kamping::v2::views::with_counts(send_counts)
                     | kamping::v2::views::auto_displs(),
-                recv_subview | kamping::v2::views::kokkos | kamping::v2::views::auto_counts() | kamping::v2::views::auto_displs(),
+                recv_subview | kamping::v2::views::kokkos | kamping::v2::views::auto_counts()
+                    | kamping::v2::views::auto_displs(),
                 comm
             );
 
-            std::println(
-                "{}",
-                matrix_to_string(rank, size, recv_matrix_full, size)
+            // std::println(
+            //     "{}",
+            //     matrix_to_string(rank, size, recv_matrix_full, size)
+            //);
+        }
+
+        {
+            // Example 3: receive into a non-contiguous subview (all rows, first rank+1 columns)
+            matrix_t recv_matrix_full(
+                "recv_matrix_full",
+                static_cast<std::size_t>(size),
+                static_cast<std::size_t>(size)
             );
+            for (std::size_t i = 0; i < recv_matrix_full.extent(0); ++i) {
+                for (std::size_t j = 0; j < recv_matrix_full.extent(1); ++j) {
+                    recv_matrix_full(i, j) = -1;
+                }
+            }
+
+            auto recv_subview = Kokkos::subview(
+                recv_matrix_full,
+                Kokkos::ALL(),
+                std::pair<std::size_t, std::size_t>{0, static_cast<std::size_t>(rank + 1)}
+            );
+
+            auto result = kamping::v2::alltoallv(
+                send_matrix | kamping::v2::views::kokkos | kamping::v2::views::with_counts(send_counts)
+                    | kamping::v2::views::auto_displs(),
+                recv_subview | kamping::v2::views::kokkos | kamping::v2::views::auto_counts()
+                    | kamping::v2::views::auto_displs(),
+                comm
+            );
+
+            auto& sbuf = result.get<0>();
+            auto& rbuf = result.get<1>();
+
+            // Force unpack
+            auto& sbuf_view = *(sbuf.base().base().base());
+            auto& rbuf_view = *(rbuf.base().base().base());
+
+            std::println("{}", matrix_to_string(rank, size, send_matrix, size));
+            std::println("{}", matrix_to_string(rank, size, recv_matrix_full, size));
         }
     }
 
     Kokkos::finalize();
     return 0;
 }
-
