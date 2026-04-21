@@ -61,8 +61,6 @@ int main(int argc, char* argv[]) {
             // Example 1: receive into size X (rank + 1) matrix
             matrix_t recv_matrix("recv_matrix", static_cast<std::size_t>(size), static_cast<std::size_t>(rank + 1));
 
-            // std::println("{}", matrix_to_string(rank, size, send_matrix, size));
-
             kamping::v2::alltoallv(
                 send_matrix | kamping::v2::views::kokkos | kamping::v2::views::with_counts(send_counts)
                     | kamping::v2::views::auto_displs(),
@@ -70,8 +68,6 @@ int main(int argc, char* argv[]) {
                     | kamping::v2::views::auto_displs(),
                 comm
             );
-
-            // std::println("{}", matrix_to_string(rank, size, recv_matrix, rank + 1));
         }
 
         {
@@ -93,8 +89,6 @@ int main(int argc, char* argv[]) {
                 Kokkos::ALL()
             );
 
-            // std::println("{}", matrix_to_string(rank, size, recv_matrix_full, size));
-
             kamping::v2::alltoallv(
                 send_matrix | kamping::v2::views::kokkos | kamping::v2::views::with_counts(send_counts)
                     | kamping::v2::views::auto_displs(),
@@ -102,11 +96,6 @@ int main(int argc, char* argv[]) {
                     | kamping::v2::views::auto_displs(),
                 comm
             );
-
-            // std::println(
-            //     "{}",
-            //     matrix_to_string(rank, size, recv_matrix_full, size)
-            //);
         }
 
         {
@@ -140,8 +129,8 @@ int main(int argc, char* argv[]) {
             auto& rbuf = result.get<1>();
 
             // Force unpack
-            auto& sbuf_view = *(sbuf.base().base().base());
-            auto& rbuf_view = *(rbuf.base().base().base());
+            sbuf.base().base().base().unwrap();
+            rbuf.base().base().base().unwrap();
 
             std::println("{}", matrix_to_string(rank, size, send_matrix, size));
             std::println("{}", matrix_to_string(rank, size, recv_matrix_full, size));
